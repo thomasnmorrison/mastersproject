@@ -43,7 +43,13 @@ rt_list = [hlon,hwodv,hwdv,lon,wodv,wdv]
 nl_list = [nl_h,nl_h,nl_h,nl,nl,nl]
 db_list = [db_h,db_h,db_h,db,db,db]
 
-def data_read(f_in, rt, f_col, db_size=0, db_row=1, scl=1, root=False):
+##### Delta V parameters #####
+a2 = 100.0
+b_1 = 0.1
+phi_p = 6.7
+
+##### Function to read in data #####
+def data_read(f_in, rt, f_col, db_size=0, db_row=1, scl=1, root=False, cut_off=0):
 	# ar_out: 	np array that will hold the data read in
 	# f_in:			taken from file name variables where data is
 	# rt:				run type
@@ -52,6 +58,7 @@ def data_read(f_in, rt, f_col, db_size=0, db_row=1, scl=1, root=False):
 	# db_row:		row of interest in data block for rt
 	# scl:			scaling factor that might be usefule eg for dividing by N_lat
 	# root:			option to take sqrt of input
+	# cut_off:	if not equal to zero will read in a number of data points equal to the value of cut_off
 	
 	##### Open data file #####
 	data_f_n = path_n + f_in + rt
@@ -66,11 +73,16 @@ def data_read(f_in, rt, f_col, db_size=0, db_row=1, scl=1, root=False):
 				line = line.strip()
 				row = line.split()
 				data.append(float(row[f_col]))
+			if cut_off != 0 and i>=cut_off:
+				break
 	elif db_size == 0:
 		for line in data_f:
+			i = i+1
 			line = line.strip()
 			row = line.split()
 			data.append(float(row[f_col]))
+			if cut_off != 0 and i>=cut_off:
+				break
 	##### Close data file #####
 	data_f.close()
 	##### Cast data to array #####
@@ -80,6 +92,48 @@ def data_read(f_in, rt, f_col, db_size=0, db_row=1, scl=1, root=False):
 	ar_out = ar_out/scl
 #	print ar_out
 	return ar_out
+
+##### Function to return an array with H #####
+def get_hub(f_in, rt):
+	# f_in:			taken from file name variables where data is
+	# rt:				run type
+	hub = data_read(f_in,rt,8)
+	hub = np.sqrt(-1./3.*hub)
+	return hub
+
+##### Function to return the index location of the end of inflation #####
+# to be more accurate I could fit a_scl*hub and interpolate the maximum
+def get_end_infl(a_scl, hub):
+	# a_scl:	array of a_scl for a particular run
+	# hub:		array of H for a particular run
+	end_infl = np.argmax(a_scl*hub)
+	return end_infl
+
+##### Function to determine at what index location phi=phi_p	#####
+# this could also be improved using some interpolation
+# this function only returns the first instance, if it is used post inflation it will need to be modified
+def get_p(phi,phi_s):
+	# phi:		array with the values of phi for a particular run
+	# phi_s:	value of phi_s to be found
+	# p:			index location of phi=phi_p (round down)
+	p = 0
+	for i in range(0,len(phi)):
+		if phi[i] >= phi_s:
+			p = i
+		else:
+			break
+	return p
+
+##### Function to determine k_p asociated with phi_p #####
+# k_p is not properly calculated
+def get_k_p(a_scl,hub,end_infl,p):
+	# a_scl:		array of a_scl for a particular run
+	# hub:			array of H for a particular run
+	# end_infl:	index location for end of inflation
+	# p:				index location for phi = phi_p (or whatever other index location)
+	# k_p:				output for k_p asociated with phi_p
+	k_p = hub[p]*a_scl[p]/a_scl[end_infl]
+	return k_p
 
 def data_dif_read(f_in, rt1, rt2, f_col, db_size1=1, db_size2=1, db_row1=0, db_row2=0, scl1=1, scl2=1, root=False):
 	# ar_out: 	np array that will hold the data read in
