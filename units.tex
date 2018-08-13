@@ -1,0 +1,40 @@
+\documentclass{revtex4}
+\usepackage{amsmath,amssymb}
+
+\begin{document}
+We introduce dimensionless time, space and field variables
+\begin{equation}
+  \bar{x} = \mu x \qquad \bar{t} = \mu t \qquad \bar{\phi} = \frac{\phi}{\Lambda} \, .
+\end{equation}
+The dimensionless potential can be derived either by rewriting the action or directly by rewriting the equations of motion in terms of $\bar{x}$,$\bar{t}$ and $\bar{\phi}$
+\begin{equation}
+  \tilde{V}(\phi) = \frac{V(\phi)}{\Lambda^2 \mu^2}
+\end{equation}
+which allows us to determine the relationship between the dimensionless potential parameters in the code and the parameters appearing in the potential.
+Notice that $\tilde{V}$ is a function of $\phi$, not $\bar{\phi}$ in the above.
+To obtain the functional form of the dimensionless potential in terms of $\bar{\phi}$, which we denote $\bar{V}(\bar{\phi})$, we write $\phi = \Lambda\bar{\phi}$ and absorbing the $\Lambda$'s into the definitions of dimensionless potential parameters in the code.
+The dimensionless scalar equation of motion used in the code is then
+\begin{equation}
+  \frac{\partial^2\bar{\phi}}{\partial\bar{t}^2} + 3\frac{H}{\mu}\frac{\partial\bar{\phi}}{\partial\bar{t}} + \frac{\partial\bar{V}(\bar{\phi})}{\partial\bar{\phi}} = 0
+\end{equation}
+
+For example, consider a monomial potential
+\begin{equation}
+  V(\phi) = g_\alpha \phi^\alpha = g_\alpha\Lambda^\alpha\left(\frac{\phi}{\Lambda}\right)^\alpha
+\end{equation}
+so that in the code, the dimensionless parameter $\bar{g}_\alpha$ is
+\begin{equation}
+  \bar{g}_{\alpha} = g_{\alpha}\frac{\Lambda^{\alpha-2}}{\mu^2} \, .
+\end{equation}
+For convenience in determining the evolution of the Hubble constant $H$, the lattice code defines $\Lambda = M_{\rm P}$ with $M_{\rm P}$ the reduced Planck mass.  We therefore obtain
+\begin{equation}
+  \bar{g}_{\alpha} = g_{\alpha}M_{\rm P}^{\alpha-2}\mu^{-2}
+\end{equation}
+and
+\begin{equation}
+  \bar{V}(\bar{\phi}) = \bar{g}_{\alpha}\bar{\phi}^\alpha
+\end{equation}
+An analogous procedure works for arbitrary functional forms of the potential.
+Similarly, if we know the physical value of a potential parameters (say in $\lambda\phi^4$ or $m^2\phi^2$), we can use this to obtain the value of $\mu$ implicitly used in the code.
+
+\end{document}
