@@ -1,0 +1,130 @@
+\documentclass[letterpaper,11pt]{article}
+\usepackage[margin=1.5in]{geometry}
+\usepackage[english]{babel}
+%\usepackage{blindtext}
+\usepackage{multicol}
+\usepackage{fullpage}
+\usepackage{mathtools}
+\usepackage{xcolor}
+%\usepackage[left=3cm,top=3cm,right=3cm,nohead,nofoot]{geometry}
+\usepackage{amsmath, amssymb, graphicx, color, array, appendix}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{sistyle}
+\usepackage{caption}
+\usepackage{soul}
+%\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{verbatim}
+\usepackage{calc}
+\usepackage{graphics}
+\usepackage{wrapfig}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\lstset{language=C}
+
+\linespread{1.3}
+\newcommand{\ud}{\,\mathrm{d}}
+
+%Title section
+\begin{document}
+%\maketitle
+%\tableofcontents
+\begin{abstract}
+%Write an abstract
+\end{abstract}
+\section{Introduction}
+\section{Theory}
+%Makes sense to start with the FRW stuff as it is used below. Can also motivate the form of the action as being the sum of the Einstein-Hilbert action, and scalar field action with a coupling term.
+%note that this is the flat FRW metric
+The simplest that can be considered for the universe is one in which the universe is spatially homogeneous and isotropic. It is well known that such a universe can be described by a Friedmann-Robertson-Walker (FRW) metric with line element
+\begin{equation}
+\ud^2s=-\ud^2t+a^2(t)(\ud x^2+\ud y^2+\ud z^2). \label{line element}
+\end{equation}
+In (\ref{line element}) $x$, $y$, $z$ are known as comoving coordinates while $a(t)$ is the scale factor. The physical significance of these quantities is that a test particle initially at rest at one position (as measured in comoving coordinates) will remain at rest at that position (again, as measured in comoving coordinates) while the physical distance between any two such stationary test particles is proportional to the scale factor and will evolve in time.
+
+The time evolution of a universe described by a FRW metric is determined by substituting the metric associated with (\ref{line element}) into the Einstein equation, the result is the Friedmann equation
+\begin{equation}
+H^2=\frac{8\pi G}{3}\rho. \label{fried eqn}
+\end{equation}
+We have introduced $H\equiv \dot{a}/a$ which is known as the Hubble parameter and measures the rate of expansion of the universe. An important property of the Hubble parameter is its inverse, $H^-1$, provides the relevant length scale for regions which are causally connected.%Reference this statement
+
+Another relation which proves useful and takes a simple for in a FRW universe is the fluid equation which is arrived at by equating the rate of change of energy in a unit comoving volume to the rate at which work is done on that volume
+\begin{align}
+&\frac{\ud}{\ud t}(\rho a^3)=-p\frac{\ud}{\ud t}(a^3),\\
+&\dot{\rho}+3H(\rho +p)=0. \label{fluid eqn}
+\end{align}
+
+%Talk about cosmic horizon
+
+%Introduce inflation
+
+
+We begin by considering the action of a set of scalar fields coupled to gravity,
+\begin{equation}
+S=\int \Big\{ \frac{R}{16\pi} - \frac{1}{2}g^{\mu \nu} \phi_{,\mu}^{\mathrm{A}} \phi_{,\nu}^{\mathrm{A}}-V(\phi^{\mathrm{A}}) \Big\} \sqrt{-g}\ud^4x
+\end{equation}
+where $R$ is the Ricci scalar, $g^{\mu \nu}$ is the metric tensor, $g$ is the determinant of the metric tensor, uppercase Roman indices run over the set of scalar fields, sums over repeated indices being implied. %Talk about dropping term for minimal coupling
+
+In this report we will be mainly with concerned with the case of two scalar fields minimally coupled to gravity. It is assumed that these fields are sufficiently close to being uniform and isotropic that the metric tensor is well approximated a Friedmann-Robertson-Walker type metric with a line element of the form $\ud s^2=-\ud t^2+a^2(t)(\ud x^2+\ud y^2+\ud z^2)$. With these assumptions the action can be rewritten as
+\begin{equation}
+S=\int \Big\{ \frac{R}{16 \pi}+\frac{1}{2a^2}(a^2 \dot{\phi}^2+a^2\dot{\chi}^2-(\nabla{\phi})^2-(\nabla{\chi})^2)-V(\phi,\chi) \Big\}a^3\ud t\ud^3x.
+\end{equation}
+Applying the Euler-Lagrange condition to extremize the above action results in the following equations of motion for the scalar fields:
+\begin{align}
+0&=\ddot{\phi}+3H\dot{\phi}+(-\frac{\Delta}{a^2}+V_{,\phi})\phi,\\
+0&=\ddot{\chi}+3H\dot{\chi}+(-\frac{\Delta}{a^2}+V_{,\chi})\chi.
+\end{align}
+Two notable differences between these equations of motion and their Minkowski space counterparts is the addition of a drag term proportional to the Hubble parameter, and the scaling of the Laplacian by a factor of $a^{-2}$. The first of these differences is dubbed the Hubble drag term and results from the time dependence of $a$. The second of these differences can be intuitively understood as the need to differentiate with respect to physical distances instead of coordinate distances.
+
+%bit about the R/16pi term giving Einstein's equation
+It is further useful to put the fields $\phi$, $\chi$ and potential $V(\phi ,\chi )$ in units of the reduced Planck mass defined $M_{Pl} \equiv (8 \pi G)^-{1/2}$. 
+
+%State the pressure and density of a scalar field and introduce the reduced Planck mass
+%Relate to the Friedmann equation and introduce inflation
+%Reference inflation and say a bit about the physical significance of having an inflationary phase
+
+Inflation was originally proposed as a possible solution to the horizon and flatness problems %Describe problems and cite Guth
+
+We can take the defining feature of inflation to be an accelerating expansion, 
+\begin{equation}
+\ddot{a}>0.
+\end{equation}
+Recalling the definition of $H$ it is easily verified that this condition of accelerating expansion can be expressed equivalently as
+\begin{equation}
+\frac{\ud}{\ud t}(\frac{H^{-1}}{a})<0.
+\end{equation}
+The physical significance of inflation can be extracted from this second definition by recognizing $H^{-1}$ as the relevant distance scale of the cosmic horizon while $a$ is the relevant distance scale between a pair of comoving points. As this ratio of scales decreases the cosmic horizon effectively shrinks with respect to comoving coordinates so that two comoving points initially causally connected may cease to be causally connected at some later time during inflation. Once inflation has terminated %write about re entering the horizon
+
+%bit about inflation explaining structure
+
+So far we have described inflation in terms of the scale factor and Hubble parameter, but have not described a scenario that would lead to inflation actually taking place and would like to relate such a scenario back to scalar fields. To relate inflation back to scalar fields we first derive a condition for inflation to proceed. By differentiating both sides of the Friedmann equation \ref{fried eqn} and substituting using the continuity equation \ref{fluid eqn} and Friedman equation \ref{fried eqn} it is possible to give conditions on when inflation will occur.%reference Liddle (check)
+\begin{align}
+\frac{\ud}{\ud t}(H^2)&=\frac{\ud}{\ud t}(\frac{1}{3}\rho)\\
+\frac{\ddot{a}}{a}&=\frac{\dot{\rho}}{6H}+H^2\\
+\frac{\ddot{a}}{a}&=-\frac{1}{2}(\frac{1}{3}\rho+p)
+\end{align}
+%I have switched to using the reduced Planck mass, make sure I include an explination for this
+The above calculation immediately gives the necessary and sufficient condition for inflation to occur in a FRW universe that $p+\rho/3<0$. For the case of inflation driven by single, spatially homogeneous, scalar field this condition can be rewritten using (\ref{density}) and (\ref{pressure})
+\begin{equation}
+\dot{\phi}^2-V(\phi)<0.
+\end{equation}
+
+
+
+
+\section{}
+In standard inflationary scenarios inflation is driven by a single scalar field which is initially far from the minimum of its potential. %quantify this with V'/V
+As this scalar field evolves following (\ref{eom phi}) it will initially proceed with $\ddot{\phi} \approx 0$, this situation is analogous to reaching terminal velocity with the Hubble parameter playing the role of drag.
+
+
+
+
+
+
+
+
+
+
+
+\end{document}
