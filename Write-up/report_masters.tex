@@ -24,6 +24,7 @@
 \lstset{language=C}
 
 \linespread{1.3}
+%\setlength{\hoffset}{0.5in}
 \newcommand{\ud}{\,\mathrm{d}}
 
 %Title section
@@ -32,6 +33,7 @@
 %\tableofcontents
 \begin{abstract}
 %Write an abstract
+A model of inflation with both a longitudinal and a transverse field is explored in which the longitudinal field drives inflation while the transverse field experiences a temporary instability. The evolution of the system during inflation is calculated by making use of a lattice simulation. The change in $\zeta$ as sourced by the gradient terms in the transverse field generated during its instability is calculated.
 \end{abstract}
 \section{Introduction}
 \section{Theory}
@@ -72,8 +74,8 @@ S=\int \Big\{ \frac{R}{16 \pi}+\frac{1}{2a^2}(a^2 \dot{\phi}^2+a^2\dot{\chi}^2-(
 \end{equation}
 Applying the Euler-Lagrange condition to extremize the above action results in the following equations of motion for the scalar fields:
 \begin{align}
-0&=\ddot{\phi}+3H\dot{\phi}+(-\frac{\Delta}{a^2}+V_{,\phi})\phi,\\
-0&=\ddot{\chi}+3H\dot{\chi}+(-\frac{\Delta}{a^2}+V_{,\chi})\chi.
+0&=\ddot{\phi}+3H\dot{\phi}+(-\frac{\Delta \phi}{a^2}+V_{,\phi}),\\
+0&=\ddot{\chi}+3H\dot{\chi}+(-\frac{\Delta \chi}{a^2}+V_{,\chi}).
 \end{align}
 Two notable differences between these equations of motion and their Minkowski space counterparts is the addition of a drag term proportional to the Hubble parameter, and the scaling of the Laplacian by a factor of $a^{-2}$. The first of these differences is dubbed the Hubble drag term and results from the time dependence of $a$. The second of these differences can be intuitively understood as the need to differentiate with respect to physical distances instead of coordinate distances.
 
@@ -107,15 +109,41 @@ So far we have described inflation in terms of the scale factor and Hubble param
 %I have switched to using the reduced Planck mass, make sure I include an explination for this
 The above calculation immediately gives the necessary and sufficient condition for inflation to occur in a FRW universe that $p+\rho/3<0$. For the case of inflation driven by single, spatially homogeneous, scalar field this condition can be rewritten using (\ref{density}) and (\ref{pressure})
 \begin{equation}
-\dot{\phi}^2-V(\phi)<0.
+\dot{\phi}^2-V(\phi)<0. \label{inflation condition 3a}
 \end{equation}
 
+%need to talk about zeta
 
+\section{Computation Techniques}
+Calculations solving the equations of motion the system are performed using a lattice simulation code %citation to code
+The lattice simulation solves for the evolution of a number of scalar fields from initial conditions as well as solving for the scale factor and Hubble factor assuming a FRW metric. For each site on the lattice values of the matter fields are stored, whereas the scale factor and Hubble parameter are assumed to be uniform over the simulation box. Derivative terms are calculated using a pseudo spectral method whereby a fast Fourier transform (FFT) is taken of the matter field values over the simulation box, then derivatives are then calculated in Fourier and finally the FFT is inverted to return the derivatives to real space.
 
+The equations of motion are cast into a Hamiltonian framework and the resulting system of equations discretized so that each point of the lattice is associated with its own conjugate variables. We have from Hamiltonian mechanic
+
+The system of equations so discretized , Hamilton's equations are put into a matrix equation format and finding the solutions to the equations of motion is equivalent to integrating this matrix equation. The 
 
 \section{}
-In standard inflationary scenarios inflation is driven by a single scalar field which is initially far from the minimum of its potential. %quantify this with V'/V
-As this scalar field evolves following (\ref{eom phi}) it will initially proceed with $\ddot{\phi} \approx 0$, this situation is analogous to reaching terminal velocity with the Hubble parameter playing the role of drag.
+In standard inflationary scenarios inflation is driven by a single scalar field which is initially homogeneous apart from small fluctuations and far from the minimum of its potential. %quantify this with V'/V
+For definiteness we will reserve $\phi$ to refer to the inflaton field, that is the field driving inflation.
+As this scalar field evolves following (\ref{eom phi}) it will initially proceed with $\ddot{\phi} \approx 0$, this situation is analogous to reaching terminal velocity with the Hubble parameter playing the role of drag. During this time $\dot{\phi}^2$ will be limited in magnitude by the $V_{,\phi}$ term in (\ref{eom phi}) and for large enough values of $V(\phi)$ the dominant contribution to the energy of the system will be from the potential, ensuring (\ref{inflation condition 3a}) is satisfied. It should be noted this description of how inflation can be driven by a scalar field contain several assumptions that may fail to hold towards the end of inflation and does not form a definition of inflation. A calculation of the evolution of such an inflaton field during inflation and shortly after the end of inflation is shown in \ref{inflaton figure}.
+
+After the end of inflation as the inflaton approaches the minimum of its potential and (\ref{eom phi}) becomes a damped oscillator equation (albeit with a drag term which has its own equation of motion given by \ref{fried eqn}). So, after inflation the inflaton will oscillate around the minimum of its potential. A calculation of the evolution of such an inflaton field during inflation and shortly after the end of inflation is shown in \ref{inflaton figure}.
+
+For definiteness we will take $\phi>0$ at initial conditions, then noting that $\phi$ decreases monotonically during inflation (see \ref{inflation figure}) $\phi$ can be thought of as a decreasing time-like variable during inflation.
+
+In what follows, we will consider an extension to the above inflationary scenario by including a second scalar field, $chi$. In the case we consider inflation is driven by the $\phi$ field (termed longitudinal), while the  $\chi$ field (termed transverse) is composed of fluctuations around zero. The potential considered is,
+\begin{equation}
+V(\phi, \chi) = \frac{\lambda_{\phi}}{4}\phi^4 + \frac{\lambda_{\chi}}{4}\chi^4 + \Delta V, \label{potential}
+\end{equation}
+where $\Delta V$ a temporary instability in the transverse direction. The form chosen for $\Delta V$ is given by
+\begin{equation}
+\Delta V = -\frac{A^2}{b\sqrt(e)}(\phi - \phi_p)exp[-\frac{(\phi-\phi_p)^2}{2b^2}]\chi^2.
+\end{equation}
+The parameters $A^2$, $b$, and $\phi_p$ respectively control the magnitude, width, and location of $\Delta V$. It can be noted that this form of $\Delta V$ is an effective mass term for the $\chi$ field. When $|\phi-\phi_p| \gg b$ $\Delta V \approx 0$ and has no effect. As $\phi$ approaches $\phi_p$ from above the $\chi$ field acquires a negative effective mass which reaches a minimum at $\phi = \phi_p + b$ (the potential remaining bounded from below by the $\chi^4$ term in \ref{potential}). Likewise, as $\phi$ approaches $\phi_p$ from below the $\chi$ field acquires a positive effective mass which reaches a maximum at $\phi = \phi_p - b$. A plot showing the effective mass bestowed on $\chi$ is shown in \ref{m2eff plot}. 
+
+There is associated with the instability in $\chi$ caused by $\Delta V$ an instability in $\phi$ and if we wish to use $\phi$ as a time-like variable during inflation it should be verified that it remains monotonic for cases with non-zero $\Delta V$. Although it is possible to violate the monotonicity with a large enough $\Delta V$, in practice the monotonicity condition is easy to satisfy due to our choice of $\phi$ as longitudinal and $\chi$ as transverse. This choice means that during inflation $|\phi| \gg |\chi|$ will be satisfied and the sign of $V_{\phi}$ will not change for small enough $\Delta V$.
+
+The effect of a non-zero $\Delta V$ in the potential is that $\chi$ will experience a temporary tachyonic instability as $\phi$ passes through the point $\phi=\phi_p$ while driving inflation. During this instability the $\chi$ field will experience exponential growth away from zero, with points where the fluctuations of $\chi$ are positive will exponentially increase, while points where the fluctuations of $\chi$ are negative will exponentially become more negative. The net effect of this instability is to cause a separation between trajectories of initially similar fluctuations in $\chi$. As $\phi$ decrease below $\phi_p$ the instability is terminated and the separation of adjacent trajectories ceases. This separation of trajectories is illustrated in \ref{chi_v-chi_nov plot} which shows the difference between several sampled trajectories of $\chi$ with and without $\Delta V$.
 
 
 
