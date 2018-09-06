@@ -152,7 +152,7 @@ After the end of inflation as the inflaton approaches the minimum of its potenti
 
 For definiteness we will take $\phi>0$ at initial conditions, then noting that $\phi$ decreases monotonically during inflation (see Figure \ref{inflation plot}) $\phi$ can be thought of as a decreasing time-like variable during inflation.
 
-\subsection{The $\zeta$ Parameter}
+\subsection{The $\zeta$ Parameter} \label{zeta theory}
 %Should talk about why production of entropy is important
 [Reference personal communication for this section]
 In this section the $\zeta$ parameter is introduced as a way of tracking when the production of entropy occurs. To identify the production on entropy consider 
@@ -176,20 +176,28 @@ The time derivative of $\zeta$ is then given by
 \end{equation}
 Equivalently in the case of scalar fields, using the energy density and equation of motion for a scalar field, (\ref{rho eqn}) and (\ref{eom phi}), allows (\ref{zeta rate}) to be rewritten as,
 \begin{equation}
-\frac{\ud \zeta}{\ud t} = \sum_i \frac{\nabla \dot{\phi}_i \cdot \nabla \phi_i + \dot{\phi}_i\nabla^2\phi_i}{3a^2(\rho + P)}
+\frac{\ud \zeta}{\ud t} = \sum_i \frac{\nabla \dot{\phi}_i \cdot \nabla \phi_i + \dot{\phi}_i\nabla^2\phi_i}{3a^2(\rho + P)} \label{zeta source}
 \end{equation}
 
 The condition for the right-hand side of (\ref{zeta rate}) to be nonzero is exactly the condition that the right-hand side of (\ref{S rate}) also be nonzero, so $\zeta$ is conserved except during periods of entropy production.
 
 \section{Computation Techniques}
 [citation for the code in this section]
-Calculations for solving the equations of motion are performed using a lattice simulation code developed by Jonathan Braden.%citation to code
-The advantage of using the lattice simulation is the ability to keep track of any nonlinearities that may arise, while the specific code used makes use of an accurate integration scheme and is capable of producing numerically accurate results. %this is a statement that should be supported
+[this section needs revision]
+
+The equations of motion for a scalar field in an expanding universe are partial differential equations and are non-linear due to the dependence of the Hubble parameter $H$ on the scalar field and its derivatives and, in general, non-linear terms from $V_{,\phi_i}$. In this work the equations of motion are solved numerically using a lattice simulation code developed by Jonathan Braden. Using a lattice simulation to solve the equations of motion has the advantage that nonlinear effects are included in the calculation.
+
+%In the lattice simulation used 
+
+%The advantage of using the lattice simulation is the ability to keep track of any nonlinearities that may arise, while the specific code used makes use of an accurate integration scheme and is capable of producing numerically accurate results. %this is a statement that should be supported
+
+In the lattice simulation, while the scalar fields are allowed to vary across the lattice, a flat FRW universe is assumed for the calculation of the scale factor, $a$, and Hubble parameter, $H$. The assumption of a FRW universe provides a good estimate for the evolution of spacetime can be physically motivated by the near homogeneity of the inflaton field.
+
 The lattice simulation solves for the evolution of a number of scalar fields from initial conditions as well as solving for the scale factor and Hubble factor assuming a FRW metric. For each site on the lattice values of the matter fields are stored, whereas the scale factor and Hubble parameter are assumed to be uniform over the simulation box. Derivative terms are calculated using a pseudo spectral method whereby a fast Fourier transform (FFT) is taken of the matter field values over the simulation box, then derivatives are then calculated in Fourier and finally the FFT is inverted to return the derivatives to real space.
 
 The equations of motion are cast into a Hamiltonian framework and the resulting system of equations discretized so that each point of the lattice is associated with its own conjugate variables. We have from Hamiltonian mechanic
 
-The system of equations so discretized , Hamilton's equations are put into a matrix equation format and finding the solutions to the equations of motion is equivalent to integrating this matrix equation. The 
+The system of equations so discretized , Hamilton's equations are put into a matrix equation format and finding the solutions to the equations of motion is equivalent to integrating this matrix equation.
 
 To the benefit of this work in investigating the effects of an instability during inflation, the lattice simulation is easily configurable to change the potential being considered. By running the lattice simulation twice from identical initial conditions, once with an instability in the potential and once without, the effects of the instability can be isolated by comparing between the two runs.
 
@@ -211,12 +219,12 @@ where $\Delta V$ provides the transient instability in the transverse direction.
 \begin{equation}
 \Delta V = -\frac{A^2\sqrt{e}}{b}(\phi - \phi_p)\mathrm{exp}\bigg[-\frac{(\phi-\phi_p)^2}{2b^2}\bigg]\chi^2. \label{dv}
 \end{equation}
-The parameters $A^2$, $b$, and $\phi_p$ respectively control the magnitude, width, and placement along the longitudinal direction of $\Delta V$, the overall sign convention for $\Delta V$ is a result of having chosen the convention that $\phi>0$ during inflation. It can be noted that this form of $\Delta V$ is an effective mass term for the $\chi$ field. When $|\phi-\phi_p| \gg b$ $\Delta V \approx 0$ and has negligible effect. As $\phi$ approaches $\phi_p$ from above the $\chi$ field acquires a negative effective mass squared which reaches a minimum at $\phi = \phi_p + b$ (the potential remaining bounded from below by the $\chi^4$ term in \ref{potential}). Likewise, as $\phi$ approaches $\phi_p$ from below the $\chi$ field acquires a positive effective mass squared which reaches a maximum at $\phi = \phi_p - b$. The surface of this potential is shown in \ref{potential plot} while the effective mass of $\chi$ is shown in \ref{meff2 plot}
+The parameters $A^2$, $b$, and $\phi_p$ respectively control the magnitude, width, and placement along the longitudinal direction of $\Delta V$, the overall sign convention for $\Delta V$ is a result of having chosen the convention that $\phi>0$ during inflation. It can be noted that this form of $\Delta V$ is an effective mass term for the $\chi$ field. When $|\phi-\phi_p| \gg, b$ $\Delta V \approx 0$ and has negligible effect. As $\phi$ approaches $\phi_p$ from above the $\chi$ field acquires a negative effective mass squared which reaches a minimum at $\phi = \phi_p + b$ (the potential remaining bounded from below by the $\chi^4$ term in (\ref{potential}). Likewise, as $\phi$ approaches $\phi_p$ from below the $\chi$ field acquires a positive effective mass squared which reaches a maximum at $\phi = \phi_p - b$. The surface of this potential is shown in Figure \ref{potential plot} while the effective mass of $\chi$ is shown in Figure \ref{meff2 plot}
 
 \begin{figure}
 \begin{center}
 \includegraphics[width=0.75\textwidth]{potential_plot1.pdf}
-\caption{An example potential surface in the form of (\ref{potential}). The transverse instability is visible as the portion of the potential surface which is concave down.}
+\caption{An example potential surface in the form of (\ref{potential}). The transverse instability is visible as the portion of the potential surface which is concave down along the $\chi$ direction, $\chi=0$ becomes stable for the portion of the potential surface that is concave up along the $\chi$ direction. The overall downwards slope from larger to lower values of $\phi$ is due to the $\phi^4$ term in the potential and is mainly responsible for driving inflation in the longitudinal direction.}
 \label{potential plot}
 \end{center}
 \end{figure}
@@ -224,18 +232,18 @@ The parameters $A^2$, $b$, and $\phi_p$ respectively control the magnitude, widt
 \begin{figure}
 \begin{center}
 \includegraphics[width=0.75\textwidth]{meff2_plot.pdf}
-\caption{A visualization of the transverse instability, the effective mass squared of $\chi$ (evaluated along $\chi=0$ with parameters $b=0.3M_{Pl}$, $\phi_p=6.5M_{Pl}$). For $\phi>\phi_p$ the transverse field is unstable around $\chi=0$, for $\phi<\phi_p$ the transverse field becomes stable around $\chi=0$.}%
+\caption{A visualization of the transverse instability, the effective mass squared of $\chi$ (evaluated along $\chi=0$ with parameters $b=0.3M_{Pl}$, $\phi_p=6.5M_{Pl}$). For $\phi>\phi_p$ the transverse field is unstable around $\chi=0$, for $\phi<\phi_p$ the transverse field becomes stable around $\chi=0$. This plot relates to the potential surface in Figure \ref{potential plot} by being a measure of its curvature in the $\chi$ direction.}
 \label{meff2 plot}
 \end{center}
 \end{figure}
 
-With the inclusion of a nonzero $\delta V$ in (\ref{potential}) there is, associated with the instability in the transverse direction, a change in $V_{,\phi}$ which becomes more significant as $\chi$ is driven away from zero.
+With the inclusion of a nonzero $\Delta V$ in (\ref{potential}) there is, associated with the instability in the transverse direction, a change in $V_{,\phi}$ which becomes more significant as $\chi$ is driven away from zero.
 \begin{equation}
 V_{,\phi} = \lambda_{\phi}\phi^3 - \frac{A^2\sqrt{e}}{b}\bigg(1 - \frac{(\phi-\phi_p)^2}{b^2}\bigg)\mathrm{exp}\bigg[-\frac{(\phi-\phi_p)^2}{2b^2}\bigg]\chi^2 \label{dv phi}
 \end{equation}
 There is then the possibility that applying a transverse instability of the form (\ref{dv}) will significantly alter the evolution of the longitudinal field, potentially causing an early end to inflation. As the target of investigation for the current work is one in which inflation continues along the longitudinal direction it will be necessary to place appropriate bounds on the potential considered.
 
-If we wish to consider the case that inflation continues during the transverse instability we should require $\dot{\phi}<0$ during inflation, that is $\phi$ continues to roll down its potential without reversing direction . In order to remain consistent with this requirement for inflation to continue we impose a set of bounds on the parameters of $\Delta V$. To estimate this set of bounds, note that in the slow-roll approximation the requirement $\dot{\phi}<0$ is equivalent to $V_{,\phi}>0$. In the slow-roll approximation it is sufficient to require that over the range of values of $\phi$ and $\chi$ covered during the evolution of the system $V(\phi, \chi)$ does not attain a local maximum. It is in principle possible to solve for this condition numerically, however by making several approximations a sufficient condition can be derived.
+If we wish to consider the case that inflation continues during the transverse instability we should require $\dot{\phi}<0$ during inflation, that is $\phi$ continues to roll down its potential without reversing direction. In order to remain consistent with this requirement for inflation to continue we impose a set of bounds on the parameters of $\Delta V$. To estimate this set of bounds, note that in the slow-roll approximation the requirement $\dot{\phi}<0$ is equivalent to $V_{,\phi}>0$. In the slow-roll approximation it is sufficient to require that over the range of values of $\phi$ and $\chi$ covered during the evolution of the system $V(\phi, \chi)$ does not attain a local maximum. It is in principle possible to solve for this condition numerically, however by making several approximations a sufficient condition can be derived.
 %Can related this part to the trapping mechanism
 
 The domain of interest, where inflation along the longitudinal direction could be stopped by the addition of $\Delta V$ to the potential is the region where $\Delta V_{,\phi} < 0$, from (\ref{dv phi}) this is $|\phi - \phi_p|<b$. The inclusion of the $\chi^4$ term in the potential insures that the range of $\chi$ remains bounded, let $|\chi|_{max}$ be a bounding value on $\chi$ so that $|\chi| \leq |\chi|_{max}$. Within the range $|\phi-\phi_p|<b$ and $|\chi|<|\chi|_{max}$ a lower bound can be placed on $\Delta V_{,\phi}$,
@@ -266,44 +274,63 @@ It should be noted that $|\chi|_{max}$ is also determined by the potential param
 %The effect of a nonzero $\Delta V$ in the potential is that $\chi$ will experience a temporary tachyonic instability as $\phi$ passes through the point $\phi=\phi_p$ while driving inflation. During this instability the $\chi$ field will experience exponential growth away from zero, with points where the fluctuations of $\chi$ are positive will exponentially increase, while points where the fluctuations of $\chi$ are negative will exponentially become more negative. The net effect of this instability is to cause a separation between trajectories of initially similar fluctuations in $\chi$. As $\phi$ decrease below $\phi_p$ the instability is terminated and the separation of adjacent trajectories ceases. 
 
 \subsection{Effects of Nonzero $\Delta V$}
-The effect of introducing a nonzero $\Delta V$ in the potential is that as inflation proceeds in the longitudinal direction and $\phi$ decrease $\chi$ will experience a transient tachyonic instability when $\phi \approx \phi_p+b \pm b$. As the transverse field, $\chi$, initially has a mean of zero the fluctuations of $\chi$ will take on both positive and negative values. During the instability, positive fluctuations of $\chi$ will grow exponentially more positive, while negative fluctuations will grow exponentially more negative. The net effect of this instability is to cause a separation between trajectories of initially similar fluctuations in $\chi$, increasing the importance of gradient terms in the equations of motion. Once $\phi$ has decreased so that $\phi < \phi_p$ the transverse instability terminates and the $\Delta V$ term in the potential instead bestows $\chi$ with an effective mass, causing the field to oscillate with time for $\phi \approx \phi_p-b \pm b$. These oscillations are damped by the Hubble drag term in the equations of motion. This separation of trajectories is illustrated in Figure\ref{chi dif plot} which shows the difference between several sampled trajectories of $\chi$ with and without $\Delta V$.
+The effect of introducing a nonzero $\Delta V$ in the potential is that as inflation proceeds in the longitudinal direction and $\phi$ decrease $\chi$ will experience a transient tachyonic instability for values of $\phi \approx \phi_p+b \pm b$. As the transverse field, $\chi$, initially has a mean of zero the fluctuations of $\chi$ will take on both positive and negative values. During the instability positive fluctuations of $\chi$ will grow exponentially more positive, while negative fluctuations will grow exponentially more negative. The net effect of this instability is to cause a separation between trajectories of initially similar fluctuations in $\chi$, increasing the importance of gradient terms in the equations of motion. Once $\phi$ has decreased so that $\phi \leq \phi_p$ the transverse instability terminates and the $\Delta V$ term in the potential instead bestows $\chi$ with an effective mass, causing the field to oscillate with time for $\phi \approx \phi_p-b \pm b$. These oscillations are damped by the Hubble drag term in the equations of motion. This separation of trajectories is illustrated in Figure \ref{chi dv plot} which compares the evolution of the $\chi$ field as calculated both with and without the transverse instability.
 
-[Mention that both the effective mass term and the gradient term in the equation of motion act as a restoring force for $\chi$, while the Hubble drag term damps the amplitude of oscillations. The mass term becomes suppressed as $\phi$ decreases below $\phi_p-b$, the gradient term becomes suppressed as $a$ increases.]
-%should mention the about the oscillations due to gradient terms
+To examine, in more detail, the behaviour of $\chi$ after the transverse instability has terminated we can write down its equation of motion from (\ref{eom phi}), (\ref{potential}) and (\ref{dv})
+\begin{align}
+0 &= \ddot{\chi} + 3H\dot{\chi} + (-\frac{\Delta \chi}{a^2} + \lambda_{\chi}\chi^3 + \Delta V_{,\chi})\\
+0 &= \ddot{\chi} + 3H\dot{\chi} + (-\frac{\Delta}{a^2} + \Delta V_{,\chi \chi})\chi + \lambda_{\chi}\chi^3. \label{eom chi}
+\end{align} 
+%For $\Delta V_{,\chi \chi}>0$ this is an oscillator equation with time dependent parameters, with anharmonicities arising due to the $\lambda_{\chi}\chi^3$ term and the indirect $\chi$ dependence of $\Delta V_{,\chi \chi}$ from coupling between $\phi$ and $\chi$. In analogy with an oscillator equation a restoring force is supplied by $\Delta V_{,\chi \chi}$ and Laplacian terms of $\chi$, damping is provided by the Hubble drag term. The effective mass term, $\Delta V_{,\chi \chi}$ becomes suppressed as $\phi$ decreases below $\phi_p-b$, the Laplacian term becomes suppressed as $a$ increases.
+For $\Delta V_{,\chi \chi}>0$ this equation resembles a damped oscillator equation with time dependent parameters, with anharmonicities arising due to the $\lambda_{\chi}\chi^3$ term and the indirect $\chi$ dependence of $\Delta V_{,\chi \chi}$ from coupling between $\phi$ and $\chi$ . The qualitative behaviour of $\chi$ after the transverse instability can be explained assuming that the time dependence of the parameters in (\ref{eom chi}) vary slowly enough that treating (\ref{eom chi}) as a damped oscillator equation is a good approximation over short enough periods of time. If this is the case, then in analogy with a damped oscillator an effective restoring force is supplied by $\Delta V_{,\chi \chi}$ and Laplacian terms of $\chi$, with damping being provided by the Hubble drag term.
 
 \begin{figure}
 \begin{center}
-%\includegraphics[width=0.75\textwidth]{}
-\caption{to add: Figure that will show the difference between $\chi$ as calculated with and without $\Delta V$}
-\label{chi dif plot}
+\includegraphics[width=0.75\textwidth]{chi_deltav_plot1.pdf}
+\caption{\emph{Top:} The evolution of $\chi$ at sampled lattice points showing the effects of $\Delta V$. \emph{Bottom:} $\Delta V_{,\chi \chi}$ is a measure of the transverse instability, it is plotted here for the parameters of $\Delta V$ used in is the calculation of $\chi$ shown in the top plot.\\
+The vertical dashed line is located at $\phi=\phi_p$, where the transverse direction transitions from unstable to stable. For $\phi>\phi_p$ trajectories of $\chi$ separate due to the transverse instability causing growth of fluctuations,  initial fluctuations in the $\chi$ field are smaller than the scale visible on this plot. For $\phi<\phi_p$ the transverse direction is stable and the $\chi$ field oscillates.}
+\label{chi dv plot}
 \end{center}
 \end{figure}
 
+
+With both sources of a restoring force becoming exponentially suppressed ($\Delta V_{,\chi \chi}$ due to the Gaussian tail for $\phi<\phi_p-b$ and $-\Delta/a^2$ due to the approximately exponential growth of $a$ during inflation) and the drag term $H$ only slowly varying during inflation the behaviour of the $\chi$ field will at some point change over from oscillatory to overdamped. At some point after $\chi$ begins exhibiting overdamped behaviour the restoring force will become negligible and the field $\chi$ will approach a constant comoving configuration for the duration of inflation.
+
+
 %Talk about the two possibilities of what happens with respect to the restoring by gradient terms
 
-There is, associated with the transverse instability, a separation of trajectories in the $\phi$ field. As fluctuations of the $\chi$ field grow during the transverse instability $\Delta V_{,\phi}$ becomes more spatially inhomogeneous as well as growing in magnitude. The result is $V_{,\phi}$ becomes less homogeneous and there is a growth of the nonzero Fourier modes of $\phi$.
+There is, associated with the transverse instability, a separation of trajectories in the $\phi$ field. As fluctuations of the $\chi$ field grow during the transverse instability $\Delta V_{,\phi}$ becomes more spatially inhomogeneous as well as growing in magnitude. The result is $V_{,\phi}$ becomes less homogeneous and there is a growth of the nonzero Fourier modes of $\phi$. 
 %figure to illustrate this
 
 \begin{figure}
 \begin{center}
-%\includegraphics[width=0.75\textwidth]{}
-\caption{To add: Figure that will show the difference between $\phi$ as calculated with and without $\Delta V$}
+\includegraphics[width=0.75\textwidth]{phi_dif_plot.pdf}
+\caption{The difference between $\phi$ as calculated with and without a $\Delta V$ term in the potential at sampled points on the lattice plotted on the vertical axis, with $\phi$ as calculated without a $\Delta V$ term in the potential along the horizontal axis, the vertical dashed line is located at $\phi=\phi_p$. The separation of trajectories of $\phi$ due to is a secondary effect of the transverse instability causing growth in $\chi$ fluctuations, as $\chi$ fluctuations also cause growth in fluctuations of $V_{,\phi}$ (see (\ref{dv phi})). Trajectories of $\phi$ separate at a delay to those of $\chi$ show in  Figure \ref{chi dv plot}}
+% and in contrast with the separation of $\chi$ trajectories}
 \label{phi dif plot}
 \end{center}
 \end{figure}
 
+[Talk about production of $\zeta$]
+
+The separation of field values at different comoving positions shown in Figure \ref{chi dv plot} and Figure \ref{phi dif plot} allows for energy flow to occur between comoving volumes as long as they remain causally connected. The flow of energy between comoving volumes violates the adiabatic assumption used for the derivation of the fluid equation (\ref{fluid eqn}), as previously mentioned in Section \ref{zeta theory}, this leads to the non-conservation of the $\zeta$ parameter. 
+
+Fluctuations of the fields at initial conditions will also lead to non-conservation of $\zeta$. In order to isolate the change in $\zeta$ that is due to the transverse instability two calculations for the evolution of the system are performed from identical initial conditions, one including the $\Delta V$ term in the potential and one setting $\Delta V=0$. Figure \ref{zeta sample plot} compares the production of $\zeta$ with and without the transverse instability.
+
+%Taking the difference of $\zeta$ as calculated with and without the $\Delta V$ term in the potential allows for the effect of the transverse instability on the $\zeta$ parameter to be isolated. Figure \ref{zeta sample plot} 
+
 \begin{figure}
 \begin{center}
-%\includegraphics[width=0.75\textwidth]{}
-\caption{To add: Figure that will show the difference between $\zeta$ as calculated with and without $\Delta V$ at sampled lattice sites}
-\label{zeta dif plot}
+\includegraphics[width=0.75\textwidth]{zeta_sample_plot.pdf}
+\caption{To add: Caption for figure that shows the difference between $\zeta$ as calculated with and without $\Delta V$ at sampled lattice sites}
+\label{zeta sample plot}
 \end{center}
 \end{figure}
 
 \begin{figure}
 \begin{center}
-%\includegraphics[width=0.75\textwidth]{}
-\caption{To add: Figure that will show the difference between $\zeta$ as calculated with and without $\Delta V$ averaged over box}
+\includegraphics[width=0.75\textwidth]{zeta_mean_plot.pdf}
+\caption{To add: Caption for figure that shows the difference between $\zeta$ as calculated with and without $\Delta V$ averaged over box}
 \label{zeta mean plot}
 \end{center}
 \end{figure}
