@@ -34,8 +34,9 @@ program lattice
   use analysis
 #ifdef OMP
   use omp_lib
-	use zeta_mod
 #endif
+	use zeta_mod
+	use sample_sites_mod
 
   implicit none
 
@@ -43,7 +44,7 @@ program lattice
   integer :: j, jj
   integer, parameter :: nstep = 2**11!2**12
   integer, parameter :: stepsize = 2**2
-  real(dl), parameter :: tstep = 1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10.
+  real(dl), parameter :: tstep = 1.0_dl/(2.0_dl**16)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10.
 !  real(dl), parameter :: tstep = 0.05
 
   integer :: terror
@@ -94,8 +95,13 @@ program lattice
   call cpu_time(tr1); call system_clock(ti1)
   call init_output()
   call init_fields(1.)
+!	call init_sites()
+	call init_sites_hom()
+!	call read_sites()
+	call init_sample_zeta()
+	call zeta_init()
   call cpu_time(tr2); call system_clock(ti2,clock_rate)
-	!call output_homogeneous()
+!	call output_homogeneous()
 	call init_homogeneous()
   print*,"Field Initialization time :",dble(ti2-ti1)/clock_rate, tr2-tr1
 
@@ -139,6 +145,8 @@ program lattice
 	call allocate_3d_real_array(nx,ny,nz,ggrad4)
 	call allocate_3d_real_array(nx,ny,nz,zf1)
 	call allocate_3d_real_array(nx,ny,nz,zf2)
+	call allocate_3d_real_array(nx,ny,nz,zf3)!new
+	call allocate_3d_real_array(nx,ny,nz,zf4)!new
 	call allocate_3d_real_array(nx,ny,nz,zfp1)
 	call allocate_3d_real_array(nx,ny,nz,zfp2)
 	call allocate_3d_real_array(nx,ny,nz,zlap1)
@@ -321,17 +329,17 @@ program lattice
       call random_seed(SIZE=nseed)
 			print*, 'nseed = ', nseed !Testing seed
       allocate(seed(nseed))
-      seed = 37*(/ (i-1, i=1,nseed) /)
+      seed = 29*(/ (i-1, i=1,nseed) /)!37*(/ (i-1, i=1,nseed) /)
 			print*, 'seed = ', seed	!Testing seed
       call random_seed(PUT=seed)
 			print*, 'seed = ', seed	!Testing seed
       deallocate(seed)
       
       do j=1,nfld
-         call sample(-0.25, 3.*fld0(1)**2)
-         fld(j,IRANGE) = fld0(j) + laplace
-         call sample(0.25, 3.*fld0(1)**2)
-         fldp(j,IRANGE) = dfld0(j) + laplace
+           call sample(-0.25, 3.*fld0(1)**2)
+        	 fld(j,IRANGE) = fld0(j) + laplace
+        	 call sample(0.25, 3.*fld0(1)**2)
+        	 fldp(j,IRANGE) = dfld0(j) + laplace
       enddo
       yscl = 1.
       call calc_metric()
@@ -394,14 +402,14 @@ program lattice
 #endif
 
 #ifdef VECTORIZE
-      PE = sum(potential(fld(1,IRANGE))) !sum(potential(fld(1,IRANGE),fld(2,IRANGE))) !
+      PE = sum(potential(fld(1,IRANGE),fld(2,IRANGE))) !sum(potential(fld(1,IRANGE))) !
       KE = sum(fldp(:,IRANGE)**2)
 #endif
 #ifdef LOOPEVOLVE
       PE=0.
 !$OMP PARALLEL DO REDUCTION(+:PE)
       FLOOP
-        PE = PE + potential(fld(1,LATIND)) !potential(fld(1,LATIND),fld(2,LATIND)) !
+        PE = PE + potential(fld(1,LATIND),fld(2,LATIND)) !potential(fld(1,LATIND)) !
       FLOOPEND  
 !$OMP END PARALLEL DO
 #endif 
@@ -545,6 +553,8 @@ program lattice
       open(unit=98,file="energy_spec.out")
       open(unit=97,file="spectrum.out")
 			open(unit=96,file="zeta.out")
+			open(unit=94,file="lat_sample.out")
+!			open(unit=93,file="sample_sites.out")
 #ifdef THREEDIM
       call init_spectrum_3d(nx,ny,nz)
 #endif
@@ -559,11 +569,13 @@ program lattice
     subroutine make_output(time)
       real(dl) :: time
       integer :: i
-      real(dl) :: spec(ns,2*nfld+2)
-      
+      !real(dl) :: spec(ns,2*nfld+2)
+			real(dl) :: spec(ns,4*nfld+1)  !to spectum and cross spec for both fields and zeta spectrum    
+
 !      call write_fields(time)
       call dump_rho(time)
 			call write_zeta(time)
+			call write_lat_sample(time)
  
 !      laplace(IRANGE) = fld(2,IRANGE) !commented out due to being for two field model
 #ifdef THREEDIM
@@ -574,11 +586,15 @@ program lattice
       call spectrum_3d(spec(:,2), laplace, Fk, planf)
       call crossspec_3d(Fk, Fk2, spec(:,3),spec(:,4))
 ! two field model output
-!			laplace(IRANGE) = fld(2,IRANGE)
-!			call spectrum_3d(spec(:,5),laplace, Fk, planf)
-!      Fk2=Fk
-!      laplace(IRANGE) = fldp(2,IRANGE)
-!      call spectrum_3d(spec(:,6), laplace, Fk, planf)
+			laplace(IRANGE) = fld(2,IRANGE)
+			call spectrum_3d(spec(:,5),laplace, Fk, planf)
+      Fk2=Fk
+      laplace(IRANGE) = fldp(2,IRANGE)
+      call spectrum_3d(spec(:,6), laplace, Fk, planf)
+			call crossspec_3d(Fk, Fk2, spec(:,7), spec(:,8))
+! zeta spec output
+			laplace(IRANGE) = zeta_lat(IRANGE)
+			call spectrum_3d(spec(:,9), laplace, Fk, planf)	
 #endif
 #ifdef TWODIM
       call spectrum_2d(spec, laplace, Fk, planf)

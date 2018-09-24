@@ -25,7 +25,7 @@ FFTW = -lfftw3_omp -lfftw3
 #FFTW = -lfftw3_threads -lfftw3
 
 HAM = hamiltonian_conformal.o 
-OBJS = fftw_mod.o params.o analysis_spec.o $(HAM) zeta_mod.o #integrator.o
+OBJS = fftw_mod.o params.o analysis_spec.o $(HAM) sample_sites_mod.o moments_mod.o zeta_mod.o #integrator.o
 
 spectral: %: $(OBJS) evolve_spectral.o
 	$(FC) $(FFTW_INC) $(FFLAGS) $(FOPT) $(FPROF) $(FWARN) -o runspec evolve_spectral.f90 $(OBJS) $(FFTW_LIB) $(FFTW) -lm $(THREAD_LIB)
