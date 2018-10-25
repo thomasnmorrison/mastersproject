@@ -41,7 +41,7 @@ program lattice
   implicit none
 ! Time Stepping Properties
   integer :: j, jj
-  integer, parameter :: nstep = 3*2**10!2**11!2**12
+  integer, parameter :: nstep = 2**4!3*2**10!2**11!2**12
   integer, parameter :: stepsize = 2**2
   real(dl), parameter :: tstep = 1.0_dl/(2.0_dl**16)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10.
 !  real(dl), parameter :: tstep = 0.05

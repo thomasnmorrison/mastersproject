@@ -2,8 +2,8 @@ module params
   integer, parameter :: dl = kind(1.d0)
   real(dl), parameter :: twopi = 6.2831853071795864769252867665590
 
-	logical, parameter :: run_hom = .FALSE. ! set to true for a homogeneous field calculation
-  integer, parameter :: nx=32, ny=32, nz=32
+  logical, parameter :: run_hom = .FALSE. ! set to true for a homogeneous field calculation
+  integer, parameter :: nx=128, ny=128, nz=128
   integer, parameter :: nnx=nx/2+1, nny=ny/2+1, nnz=nz/2+1
   integer, parameter :: nn = min(nnx,nny,nnz)
 
