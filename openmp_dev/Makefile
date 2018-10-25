@@ -6,7 +6,7 @@
 
 #Intel Compiler
 FC=ifort
-FFLAGS=-r8 -fpp
+FFLAGS=-r8 -fpp -openmp
 FOPT= #-O3 -xHost -ipo -openmp #-parallel
 FPROF= #-pg -g
 
