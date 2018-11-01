@@ -26,6 +26,10 @@
 !#define M2I(PHI,PSI) VECTOR((PHI)**2+g2*(PSI)**2, g2*(PHI)**2)
 !#define NUMFIELD 2
 
+! to do: compute and output cross terms, ie P_phichi
+! to do: figure out field outputing, should be done using a binary file
+! to do: output file with the run parameters, may be best to output his to terminal so the Niagara job output file contains this information as it is uniquely named 
+
 program lattice
 #include "macros.h"
   use fftw3
@@ -41,9 +45,9 @@ program lattice
   implicit none
 ! Time Stepping Properties
   integer :: j, jj
-  integer, parameter :: nstep = 2**4!3*2**10!2**11!2**12
+  integer, parameter :: nstep = 2**12!2**11!2**12
   integer, parameter :: stepsize = 2**2
-  real(dl), parameter :: tstep = 1.0_dl/(2.0_dl**16)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10.
+  real(dl), parameter :: tstep = 1.0_dl/(2.0_dl**15)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10.
 !  real(dl), parameter :: tstep = 0.05
 
   integer :: terror
@@ -337,12 +341,42 @@ program lattice
 			print*, 'seed = ', seed	!Testing seed
       deallocate(seed)
       
-      do j=1,nfld
-           call sample(-0.25, 3.*fld0(1)**2)
-        	 fld(j,IRANGE) = fld0(j) + laplace
-        	 call sample(0.25, 3.*fld0(1)**2)
-        	 fldp(j,IRANGE) = dfld0(j) + laplace
-      enddo
+      !do j=1,nfld
+      !    call sample(-0.25, 3.*fld0(1)**2)! fix this term for effective mass
+      !  	 fld(j,IRANGE) = fld0(j) + laplace
+      !  	 call sample(0.25, 3.*fld0(1)**2)
+      !  	 fldp(j,IRANGE) = dfld0(j) + laplace
+      !enddo
+
+			! This initializing routine uses m2eff calculated for chi0 = 0, if chi0 != 0 the mass matrix is not diagonal.
+			! Should check that for the fluctuations produced using the mean field of chi is valid.
+			!	Initialize phi field
+			if (infl_option==1) then
+      	call sample(-0.25, 3.*fld0(1)**2)
+      	fld(1,IRANGE) = fld0(1) + laplace
+      	call sample(0.25, 3.*fld0(1)**2)
+      	fldp(1,IRANGE) = dfld0(1) + laplace
+			elseif (infl_option==2) then
+				if (potential_option==0) then
+      		call sample(-0.25, m2)
+      		fld(1,IRANGE) = fld0(1) + laplace
+      		call sample(0.25, m2)
+      		fldp(1,IRANGE) = dfld0(1) + laplace
+				elseif (potential_option==1) then
+      		call sample(-0.25, m2+g2*fld0(2))
+      		fld(1,IRANGE) = fld0(1) + laplace
+      		call sample(0.25, m2+g2*fld0(2))
+      		fldp(1,IRANGE) = dfld0(1) + laplace
+				endif
+			endif
+      ! Initialize chi field
+			if (potential_option==1) then
+				call sample(-0.25, g2*(fld0(1)-phi_p)**2-beta2)
+      	fld(2,IRANGE) = fld0(2) + laplace
+      	call sample(0.25, g2*(fld0(1)-phi_p)**2-beta2)
+      	fldp(2,IRANGE) = dfld0(2) + laplace
+			endif
+
       yscl = 1.
       call calc_metric()
     end subroutine init_fields
@@ -556,6 +590,7 @@ program lattice
       open(unit=97,file="spectrum.out")
 			open(unit=96,file="zeta.out")
 			open(unit=94,file="lat_sample.out")
+			open(unit=92,file="lat_dump.out",form="unformatted") !TESTING REQUIRED! binary file of field output
 !			open(unit=93,file="sample_sites.out")
 #ifdef THREEDIM
       call init_spectrum_3d(nx,ny,nz)
@@ -572,13 +607,18 @@ program lattice
       real(dl) :: time
       integer :: i
       !real(dl) :: spec(ns,2*nfld+2)
-			real(dl) :: spec(ns,4*nfld+1)  !to spectum and cross spec for both fields and zeta spectrum    
+			real(dl) :: spec(ns,4*nfld+4)  !to spectum and cross spec for both fields and zeta spectrum
+			!real(dl) :: spec(ns,2*(4*nfld+4)) !to spectrum and cross spec for both fields and zeta and difference 
 
 !      call write_fields(time)
       call dump_rho(time)
 			call write_zeta(time)
 			call write_lat_sample(time)
- 
+! if the WINT is not defined call lat_dump to output the lattice to a binary file 
+!#ifndef WINT
+!			call lat_dump()
+!#endif 
+
 !      laplace(IRANGE) = fld(2,IRANGE) !commented out due to being for two field model
 #ifdef THREEDIM
       laplace(IRANGE) = fld(1,IRANGE)
@@ -596,7 +636,41 @@ program lattice
 			call crossspec_3d(Fk, Fk2, spec(:,7), spec(:,8))
 ! zeta spec output
 			laplace(IRANGE) = zeta_lat(IRANGE)
-			call spectrum_3d(spec(:,9), laplace, Fk, planf)	
+			call spectrum_3d(spec(:,9), laplace, Fk, planf)
+			Fk2=Fk
+			laplace(IRANGE) = dzeta_lat(2,IRANGE)
+			call spectrum_3d(spec(:,10), laplace, Fk, planf)
+			call crossspec_3d(Fk, Fk2, spec(:,11), spec(:,12))
+
+! Spectrum of difference
+! Untested, requires two modes of running, can have two verisions of this function that are toggled by either a precompiler
+! statement, or from potential_mod potential_option parameter and use the opposite toggle for calling or not calling lat_dump.
+			! call an instance of lat_read
+!#ifdef WINT
+!			call lat_read(f, fp, z, dz) ! pass varibles, need declaration/renaming
+
+			! comupte spectra
+!			laplace(IRANGE) = fld(1,IRANGE) - f(1,IRANGE)
+!			call spectrum_3d(spec(:,13), laplace, Fk, planf)
+!			Fk2=Fk
+!      laplace(IRANGE) = fldp(1,IRANGE) - fp(1,IRANGE)
+!      call spectrum_3d(spec(:,14), laplace, Fk, planf)
+!      call crossspec_3d(Fk, Fk2, spec(:,15),spec(:,16))
+! two field model output
+!			laplace(IRANGE) = fld(2,IRANGE) - f(2,IRANGE)
+!			call spectrum_3d(spec(:,17),laplace, Fk, planf)
+!      Fk2=Fk
+!      laplace(IRANGE) = fldp(2,IRANGE) - fp(2,IRANGE)
+!      call spectrum_3d(spec(:,18), laplace, Fk, planf)
+!			call crossspec_3d(Fk, Fk2, spec(:,19), spec(:,20))
+! zeta spec output
+!			laplace(IRANGE) = zeta_lat(IRANGE) - z(IRANGE)
+!			call spectrum_3d(spec(:,21), laplace, Fk, planf)
+!			Fk2=Fk
+!			laplace(IRANGE) = dzeta_lat(2,IRANGE) - dz(IRANGE)
+!			call spectrum_3d(spec(:,22), laplace, Fk, planf)
+!			call crossspec_3d(Fk, Fk2, spec(:,23), spec(:,24))
+!#endif
 #endif
 #ifdef TWODIM
       call spectrum_2d(spec, laplace, Fk, planf)
@@ -646,5 +720,36 @@ program lattice
 				fldp(i,IRANGE) = fldp_hom(i)
 			enddo
 		end subroutine init_homogeneous
+
+	! Write lattice to an unformatted file
+	! Still untested
+	subroutine lat_dump()
+		integer :: i
+		do i=1, nfld
+			! write field and field momentum n the whole lattice to a file
+			write(92) fld(i,IRANGE)
+			write(92) fldp(i,IRANGE)
+		enddo
+		! write zeta and dzeta/dtau to a file for whole lattice
+		write(92) zeta_lat(IRANGE)
+		write(92) dzeta_lat(2,IRANGE) ! the index 2 is because dzeta_lat(1,IRANGE) hold dzeta_lat from the previous time step
+	end subroutine lat_dump
+
+	! Read in lattice from previous run and store value in some arrays
+	! Still untested
+	! Need to check if * in formating will correctly identify format from binary
+	subroutine lat_read(f, fp, z, dz)
+		! Declare variables
+		real(dl), dimension(nfld,IRANGE) :: f, fp
+		real(dl), dimension(IRANGE) :: z, dz
+		integer :: i
+		
+		do i=1,nfld
+			read(92,*) f(i,IRANGE)
+			read(92,*) fp(i,IRANGE)
+		enddo
+		read(92,*) z(IRANGE)
+		read(92,*) dz(IRANGE)
+	end subroutine lat_read
 
   end program lattice
