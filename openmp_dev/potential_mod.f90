@@ -18,29 +18,42 @@ module potential_mod
 
   implicit none
 
-	integer, parameter :: potential_option = 1 ! parameter to choose the form of Delta_V
+	integer, parameter :: potential_option = 5 ! parameter to choose the form of Delta_V
 	! no phi-chi interaction: potential_option = 0
 	! trapped plus transverse instability: potential_option = 1
 	! transverse instability blip: potential_option = 2
 	! absolute value transverse blip: potential_option = 3
+	! trapped-asymptotically constant: potential_option = 4
+	! constant chi mass: potential_option = 5
 	integer, parameter :: infl_option = 2 ! parameter to choose form of inflationary potential
 	! phi^4: infl_option = 1
 	! m^2 phi^2: infl_option = 2
 
 	! general parameters
+	real(dl), parameter :: mpl=1.e3												! machine units conversion factor, moved from hampiltonian_conformal.f90
 	real(dl), parameter :: m2 = 1.0_dl										! inflaton mass
 	real(dl), parameter :: lambda_chi = 0.0_dl						! chi self interaction
 	real(dl), parameter :: phi_p = 3.2!*dsqrt(4.0*twopi)	! interaction potential characteristic phi value
 
 	! potential_option = 1 parameters
-	real(dl), parameter :: g2 = 1.e6											! phi-chi coupling strength
-	real(dl), parameter :: beta2 = 1.0e-6*g2							! instability amplitude
+	real(dl), parameter :: g2 = (1.e5)!/(4.*twopi)!1.e6											! phi-chi coupling strength
+	real(dl), parameter :: beta2 = 0.!1.e-3*g2							! instability amplitude
 
 	! potential_option = 2 parameters
 	real(dl), parameter :: a2 =	1.2e4											! max/min of deltaV
 	real(dl), parameter :: b_1 = 0.3_dl										!	width of deltaV (std of Gaussian envelope)
 	real(dl), parameter :: c_1 = a2/b_1*exp(0.5_dl)				!	normalization factor
 	real(dl), parameter :: c_2 = 1.0_dl/(2.0_dl*b_1**2)		! derived parameter for deltaV
+
+	! potential_option = 4 parameters
+	real(dl), parameter :: m2_inf = 4.*sqrt(2./3.)*sqrt((1.e5))!1.0_dl										! asymptotic squared mass of chi
+	real(dl), parameter :: m2_p =	0.0_dl											! minimum squared mass of chi (at phi=phi_p) 
+	! Derived parameters
+	real(dl), parameter :: c_3 = 2.*sqrt(3.*g2/(m2_inf-m2_p))
+	! Also set g2 under "potential_option = 1 parameters"
+
+	! potential_option = 5 parameters
+	! set m2_inf under "potential_option = 4 parameters"
 
 contains
 
@@ -90,6 +103,11 @@ contains
 			Delta_V = - c_1*(f1-phi_p)*exp(-c_2*(f1-phi_p)**2)*f2**2
 		elseif (potential_option==3) then
 			Delta_V = abs(c_1*(f1-phi_p))*exp(-c_2*(f1-phi_p)**2)*f2**2
+		elseif (potential_option==4) then
+			!Delta_V = 0.5_dl * (m2_inf - 6.*(m2_inf-m2_p) / (5.+dcosh(2.*dsqrt(3.*g2)*(f1-phi_p)/dsqrt(m2_inf-m2_p))) )*f2**2
+			Delta_V = 0.5_dl * (m2_inf - 6.*(m2_inf-m2_p) / (5.+dcosh(c_3*(f1-phi_p))) )*f2**2
+		elseif (potential_option==5) then
+			Delta_V = 0.5 * m2_inf * f2**2
 		endif
   end function Delta_V
 
@@ -127,6 +145,21 @@ contains
 			if (ind==2) then
 				Delta_dV = 2.0_dl*abs(c_1*(f1-phi_p)*exp(-c_2*(f1-phi_p)**2))*f2
 			endif
+		elseif (potential_option==4) then
+			if (ind==1) then
+				!Delta_dV = (6.*dsqrt(3.*g2*(m2_inf-m2_p)) * dsinh(2.*dsqrt(3.*g2)*(f1-phi_p)/dsqrt(m2_inf-m2_p)) / (5.+dcosh(2.*dsqrt(3.*g2)*(f1-phi_p)/dsqrt(m2_inf-m2_p)))**2 ) * f2**2
+				Delta_dV = (6.*dsqrt(3.*g2*(m2_inf-m2_p)) * dsinh(c_3*(f1-phi_p)) / (5.+dcosh(c_3*(f1-phi_p)))**2 ) * f2**2
+			endif
+			if (ind==2) then
+				Delta_dV = (m2_inf - 6.*(m2_inf-m2_p)/(5.+dcosh(c_3*(f1-phi_p))))*f2
+			endif
+		elseif (potential_option==5) then
+			if (ind==1) then
+				Delta_dV = 0.0
+			endif
+			if (ind==2) then
+				Delta_dV = m2_inf*f2
+			endif			
 		endif
   end function Delta_dV
 

@@ -45,9 +45,11 @@ program lattice
   implicit none
 ! Time Stepping Properties
   integer :: j, jj
-  integer, parameter :: nstep = 2**12!2**11!2**12
+  integer, parameter :: nstep = 2!2**11!2**12
   integer, parameter :: stepsize = 2**2
-  real(dl), parameter :: tstep = 1.0_dl/(2.0_dl**15)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10.
+  real(dl), parameter :: tstep0 = 1.0_dl/(2.0_dl**14)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
+	real(dl) :: tstep = tstep0 ! time step which is updated
+	real(dl) :: t_cur = 0.0 ! tracks the elapsed conformal time
 !  real(dl), parameter :: tstep = 0.05
 
   integer :: terror
@@ -126,7 +128,11 @@ program lattice
 		 call symp8(tstep, stepsize)
      !step zeta
 		 call zeta_step(stepsize*tstep, [nx,ny,nz], dk, Fk, Fk2, Fk3, planf, planb)
-     call make_output(j*stepsize*tstep)
+		 !adapt step size
+		 t_cur = t_cur + stepsize*tstep
+		 call tstep_adapt()
+     !call make_output(j*stepsize*tstep)
+		 call make_output(t_cur)
   enddo
   call cpu_time(tr2); call system_clock(ti2,clock_rate)
   print*,"Total Evolution Time :",dble(ti2-ti1)/clock_rate, tr2-tr1
@@ -364,17 +370,32 @@ program lattice
       		fldp(1,IRANGE) = dfld0(1) + laplace
 				elseif (potential_option==1) then
       		call sample(-0.25, m2+g2*fld0(2))
-      		fld(1,IRANGE) = fld0(1) + laplace
+      		fld(1,IRANGE) = fld0(1) + laplace !temporarily taken out fluctuations
       		call sample(0.25, m2+g2*fld0(2))
-      		fldp(1,IRANGE) = dfld0(1) + laplace
+      		fldp(1,IRANGE) = dfld0(1) + laplace !temporarily taken out fluctuations
+				elseif (potential_option==4 .OR. potential_option==5) then ! assumes fld0(2) = 0
+      		call sample(-0.25, m2)
+      		fld(1,IRANGE) = fld0(1) + laplace !temporarily taken out fluctuations
+      		call sample(0.25, m2)
+      		fldp(1,IRANGE) = dfld0(1) + laplace !temporarily taken out fluctuations
 				endif
 			endif
       ! Initialize chi field
 			if (potential_option==1) then
 				call sample(-0.25, g2*(fld0(1)-phi_p)**2-beta2)
-      	fld(2,IRANGE) = fld0(2) + laplace
+      	fld(2,IRANGE) = fld0(2) + laplace !temporarily taken out fluctuations
       	call sample(0.25, g2*(fld0(1)-phi_p)**2-beta2)
-      	fldp(2,IRANGE) = dfld0(2) + laplace
+      	fldp(2,IRANGE) = dfld0(2) + laplace !temporarily taken out fluctuations
+			elseif (potential_option==4) then
+				call sample(-0.25, m2_inf - 6.*(m2_inf-m2_p) / (5.+dcosh(2.*dsqrt(3.*g2)*(fld0(1)-phi_p)/dsqrt(m2_inf-m2_p))) )
+      	fld(2,IRANGE) = fld0(2) + laplace !temporarily taken out fluctuations
+      	call sample(0.25, m2_inf - 6.*(m2_inf-m2_p) / (5.+dcosh(2.*dsqrt(3.*g2)*(fld0(1)-phi_p)/dsqrt(m2_inf-m2_p))))
+      	fldp(2,IRANGE) = dfld0(2) + laplace !temporarily taken out fluctuations
+			elseif (potential_option==5) then
+				call sample(-0.25, m2_inf)
+      	fld(2,IRANGE) = fld0(2) + laplace !temporarily taken out fluctuations
+      	call sample(0.25, m2_inf)
+      	fldp(2,IRANGE) = dfld0(2) + laplace !temporarily taken out fluctuations			
 			endif
 
       yscl = 1.
@@ -481,7 +502,7 @@ program lattice
 #ifdef THREEDIM
       write(98,'(30(ES22.15,2X))') time, acur, rho, KE, PE, GE, grav_energy(), &
            (rho+grav_energy())/rho, -ysclp**2/12._dl/acur**4, &
-           sum(fld(1,IRANGE))/nvol, sum(fld(2,IRANGE))/nvol !Commented out last output, was for two field model
+           sum(fld(1,IRANGE))/nvol, sum(fld(2,IRANGE))/nvol, sum(fldp(1,IRANGE))/nvol, sum(fldp(2,IRANGE))/nvol !Commented out last output, was for two field model
 #endif
 #ifdef TWODIM
       write(98,*) time, rho, KE, PE, GE, grav_energy(), sum(fld(1,:,:))/nvol, sum(fld(2,:,:))/nvol
@@ -496,7 +517,7 @@ program lattice
 !
 ! Randomly sample a gaussian random field with the appropriate spectrum
 !
-#define KCUT_FAC 1.
+#define KCUT_FAC 12.
     subroutine sample(gamma, m2eff, spec)
 !      real(C_DOUBLE), pointer :: f(:,:,:)
       real(dl) :: gamma
@@ -528,7 +549,9 @@ program lattice
       
     ! calculate (oversampled) radial profile of convolution kernel
       do k = 1,nos; kk = (k-0.5)*dkos
-         ker(k) = kk*(kk**2 + m2eff)**gamma * exp(-(kk/kcut)**2)
+         !ker(k) = kk*(kk**2 + m2eff)**gamma * exp(-(kk/kcut)**2)	! filter fluctuations for Niquist
+				 !ker(k) = kk*(kk**2 + m2eff)**gamma * exp(-(kk/KCUT_FAC*(H0*exp(H0*(phi_p-phi0)/dphi0)))**2)	 !filter fluctuations for horizon scale
+					ker(k) = kk*(kk**2 + m2eff)**gamma * exp(-0.5*(kk/(KCUT_FAC*H0*exp(H0*(phi_p-phi0)/dphi0)*exp(H0/sqrt(sqrt(1.e5)*abs(dphi0)))))**2)	 !filter fluctuations at the horizon sclae at the end of non-adiatic event !!!FIX THIS WHEN YOU GET THE CHANCE FILTERING SHOULD NOT DEPEND ON g2, I'VE HARD CODED A VALUE AS A TEMPORARY FIX.
       end do
       
 !      Assign the kernel here
@@ -590,7 +613,7 @@ program lattice
       open(unit=97,file="spectrum.out")
 			open(unit=96,file="zeta.out")
 			open(unit=94,file="lat_sample.out")
-			open(unit=92,file="lat_dump.out",form="unformatted") !TESTING REQUIRED! binary file of field output
+			!open(unit=92,file="lat_dump.out",form="unformatted") !TESTING REQUIRED! binary file of field output
 !			open(unit=93,file="sample_sites.out")
 #ifdef THREEDIM
       call init_spectrum_3d(nx,ny,nz)
@@ -751,5 +774,9 @@ program lattice
 		read(92,*) z(IRANGE)
 		read(92,*) dz(IRANGE)
 	end subroutine lat_read
+
+	subroutine tstep_adapt()
+		tstep = tstep0/yscl
+	end subroutine tstep_adapt
 
   end program lattice

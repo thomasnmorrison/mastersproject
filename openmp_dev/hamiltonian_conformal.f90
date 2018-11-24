@@ -8,7 +8,7 @@ module Hamiltonian
 
   !real(dl), parameter :: g2=0.0_dl ! now in potential_mod
 !  real(dl), parameter :: mx2=-10.0_dl!-1.3681791005379032637308496454					! mass term for chi field
-  real(dl), parameter :: mpl=1.e3!1.e3/(dsqrt(4.0*twopi))!1.e7/3.
+  !real(dl), parameter :: mpl=1.e3!1.e3/(dsqrt(4.0*twopi))!1.e7/3.
   integer, parameter :: nfld=2!1!
 
 ! These parameters have been moved over to potential_mod
@@ -24,10 +24,10 @@ module Hamiltonian
 
 	!real(dl), parameter :: infl=4.1_dl !inflation parameter y
 
-  real(dl), parameter :: phi0 = 3.825_dl!*dsqrt(4.0_dl*twopi)!7.511816626277513_dl!2.3393837654714997732962993666073! infl*2.309401076758!7.502897008008175! !		
-  real(dl), parameter :: dphi0 = -dsqrt(2.0_dl/3.0_dl)!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
+  real(dl), parameter :: phi0 = 3.2_dl + 0.25_dl!sqrt(0.8164/sqrt(g2))!7.511816626277513_dl!2.3393837654714997732962993666073! infl*2.309401076758!7.502897008008175! !		
+  real(dl), parameter :: dphi0 = -0.8164_dl!-dsqrt(2.0_dl/3.0_dl)!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
   real(dl), parameter :: chi0 = 0.0_dl !-3.38704185098e-7!3.9e-7 !
-  real(dl), parameter :: H0 = phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !				
+  real(dl), parameter :: H0 = 1.408!1.306_dl !6.6599_dl!phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !				
   real(dl), parameter, dimension(nfld) :: fld0 = (/phi0,chi0/)!(/phi0/)!
   real(dl), parameter, dimension(nfld) :: dfld0 = (/dphi0,0.0_dl/)!(/dphi0/)!
 
