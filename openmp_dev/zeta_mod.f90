@@ -20,7 +20,7 @@ module zeta_mod
 	real(dl) :: zeta = 0.0_dl
 	real(dl), dimension(2) :: dzeta = (/0.0_dl,0.0_dl/)
 	real(dl), dimension(IRANGE) :: zeta_lat
-	real(dl), dimension(2,IRANGE) :: dzeta_lat
+	real(dl), dimension(2,IRANGE) :: dzeta_lat !dzeta/dtau
 	
 	! additional pointers needed for calculating dzeta
 	real(C_DOUBLE), pointer :: ggrad1(:,:,:)
