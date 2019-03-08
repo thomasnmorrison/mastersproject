@@ -12,8 +12,13 @@ FPROF= #-pg -g
 
 #FFTW_INC=-I/usr/local/fftw-3.3.3/include/
 #FFTW_LIB=-L/usr/local/fftw-3.3.3/lib
-
 FFTW = -lfftw3_omp -lfftw3
+
+# Add LAPACK (library location locally defined) 
+LAPACK_INC = -I ~/lapack-3.8.0
+LAPACK_LIB = -L ~/lapack-3.8.0
+LAPACK = -llapack
+BLAS = -lrefblas
 
 #ifdef OMP
 #FFLAGS+= -fopenmp
@@ -25,13 +30,13 @@ FFTW = -lfftw3_omp -lfftw3
 #FFTW = -lfftw3_threads -lfftw3
 
 HAM = hamiltonian_conformal.o 
-OBJS = fftw_mod.o params.o analysis_spec.o potential_mod.o $(HAM) sample_sites_mod.o moments_mod.o zeta_mod.o #integrator.o
+OBJS = fftw_mod.o params.o analysis_spec.o potential_mod.o correlator_mod.o $(HAM) sample_sites_mod.o moments_mod.o zeta_mod.o #integrator.o
 
 spectral: %: $(OBJS) evolve_spectral.o
-	$(FC) $(FFTW_INC) $(FFLAGS) $(FOPT) $(FPROF) $(FWARN) -o runspec evolve_spectral.f90 $(OBJS) $(FFTW_LIB) $(FFTW) -lm $(THREAD_LIB)
+	$(FC) $(FFTW_INC) $(LAPACK_INC) $(FFLAGS) $(FOPT) $(FPROF) $(FWARN) -o runspec evolve_spectral.f90 $(OBJS) $(FFTW_LIB) $(FFTW) $(LAPACK_LIB) $(LAPACK) $(BLAS) -lm $(THREAD_LIB)
 
 %.o: %.f90
-	$(FC) $(FFLAGS) $(FFTW_INC) $(FOPT) $(FPROF) $(FWARN) -c $< -o $@ $(FFTW_LIB) $(FFTW) -lm $(THREAD_LIB)
+	$(FC) $(FFLAGS) $(FFTW_INC) $(LAPACK_INC) $(FOPT) $(FPROF) $(FWARN) -c $< -o $@ $(FFTW_LIB) $(FFTW) $(LAPACK_LIB) $(LAPACK) $(BLAS) -lm $(THREAD_LIB)
 
 clean:
 	rm -f *.o

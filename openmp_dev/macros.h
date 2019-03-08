@@ -1,6 +1,10 @@
 #define SPECTRAL 1
 !#define DISCRETE 1
 
+#define RENORM 0
+
+#define WINT 1
+
 #define THREEDIM 1
 !#define TWODIM 1
 !#define ONEDIM 1

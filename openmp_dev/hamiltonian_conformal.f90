@@ -9,7 +9,7 @@ module Hamiltonian
   !real(dl), parameter :: g2=0.0_dl ! now in potential_mod
 !  real(dl), parameter :: mx2=-10.0_dl!-1.3681791005379032637308496454					! mass term for chi field
   !real(dl), parameter :: mpl=1.e3!1.e3/(dsqrt(4.0*twopi))!1.e7/3.
-  integer, parameter :: nfld=2!1!
+  !integer, parameter :: nfld=2	! moved to potential_mod.f90
 
 ! These parameters have been moved over to potential_mod
 	!real(dl), parameter :: a2 =	0.0_dl!1.2e4!										! max/min of deltaV, or are in symmetrized version
@@ -28,8 +28,8 @@ module Hamiltonian
   real(dl), parameter :: dphi0 = -0.8164_dl!-dsqrt(2.0_dl/3.0_dl)!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
   real(dl), parameter :: chi0 = 0.0_dl !-3.38704185098e-7!3.9e-7 !
   real(dl), parameter :: H0 = 1.408!1.306_dl !6.6599_dl!phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !				
-  real(dl), parameter, dimension(nfld) :: fld0 = (/phi0,chi0/)!(/phi0/)!
-  real(dl), parameter, dimension(nfld) :: dfld0 = (/dphi0,0.0_dl/)!(/dphi0/)!
+  real(dl), parameter, dimension(nfld) :: fld0 = (/0._dl,0._dl/)!(/phi0,chi0/)!(/phi0/)!
+  real(dl), parameter, dimension(nfld) :: dfld0 = (/0._dl,0._dl/)!(/dphi0,0.0_dl/)!(/dphi0/)!
 
   integer, parameter :: n_Hamiltonian_terms = 3
 
@@ -129,6 +129,10 @@ contains
 #endif
 
     KE2 = KE2 / nvol
+#ifdef RENORM
+		!call get_KE_vacmink()
+		!KE2 = KE2 - KE_vacmink*yscl**6
+#endif
     ysclp = ysclp + dt*KE2/yscl**3
   end subroutine Hamiltonian_fields_kin
 
@@ -217,6 +221,12 @@ contains
 
     PE = PE / nvol
     GE2 = GE2 / nvol
+#ifdef RENORM
+		!call get_PE_vacmink()
+		!PE = PE - PE_vacmink
+		!call get_GE_vacmink()
+		!GE2 = GE2 - GE_vacmink()
+#endif
     ysclp = ysclp - yscl**3*(GE2 + 4._dl*PE)*dt
 
   end subroutine Hamiltonian_fields_grad_pot
@@ -373,6 +383,15 @@ contains
       GE = GE - sum(fld(:,i,j,k)*lap(:))
     FLOOPEND
     GE = elap*GE / nvol / yscl**2
+#endif
+
+#ifdef RENORM
+		!call get_KE_vacmink()
+		!KE = KE - KE_vacmink*yscl**6
+		!call get_PE_vacmink()
+		!PE = PE - PE_vacmink
+		!call get_GE_vacmink()
+		!GE = GE - GE_vacmink
 #endif
     rho = KE + PE + GE
     ysclp = -sqrt(yscl**4*12._dl*rho)

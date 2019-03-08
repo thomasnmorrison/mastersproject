@@ -26,9 +26,10 @@
 !#define M2I(PHI,PSI) VECTOR((PHI)**2+g2*(PSI)**2, g2*(PHI)**2)
 !#define NUMFIELD 2
 
-! to do: compute and output cross terms, ie P_phichi
 ! to do: figure out field outputing, should be done using a binary file
-! to do: output file with the run parameters, may be best to output his to terminal so the Niagara job output file contains this information as it is uniquely named 
+! to do: output file with the run parameters, may be best to output his to terminal so the Niagara job output file contains this information as it is uniquely named
+! to do: make a precompiler statement for choosing how rho is remormalized
+! to do: make a precompiler for how fields are initialized
 
 program lattice
 #include "macros.h"
@@ -40,17 +41,20 @@ program lattice
   use omp_lib
 #endif
 	use zeta_mod
+	use correlator_mod
 	use sample_sites_mod
+!	use renorm_mod
 
   implicit none
 ! Time Stepping Properties
   integer :: j, jj
-  integer, parameter :: nstep = 2**12!2**11!2**12
-  integer, parameter :: stepsize = 2**2
-  real(dl), parameter :: tstep0 = 1.0_dl/(2.0_dl**14)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
+  integer, parameter :: nstep = 0!2**0!2**11!2**12
+  integer, parameter :: stepsize = 2**3
+  real(dl), parameter :: tstep0 = 1.0_dl/(2.0_dl**15)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
 	real(dl) :: tstep = tstep0 ! time step which is updated
 	real(dl) :: t_cur = 0.0 ! tracks the elapsed conformal time
 !  real(dl), parameter :: tstep = 0.05
+	integer :: seed_in
 
   integer :: terror
 
@@ -58,7 +62,7 @@ program lattice
   real*8 :: tr1,tr2
 
   complex(C_DOUBLE_COMPLEX), pointer :: Fk2(:,:,:)
-!	complex(C_DOUBLE_COMPLEX), pointer :: Fk3(:,:,:)
+	complex(C_DOUBLE_COMPLEX), pointer :: Fk4(:,:,:) ! Fk3 is defined in zeta_mod.f90
 
 !	real(C_DOUBLE), pointer :: ggrad1(:,:,:)
 !	real(C_DOUBLE), pointer :: ggrad2(:,:,:)
@@ -99,8 +103,17 @@ program lattice
 
   call cpu_time(tr1); call system_clock(ti1)
   call init_output()
-  call init_fields(1.)
-	call init_sites()
+
+! initialize fields	
+	call slow_roll_cor_lat(H0)			! specific routine to provide an initial power spectrum
+	! This loop is for testing field initialization, ordinarily only initialize fileds once
+	do seed_in=1,2**8
+		call init_fields_cor2(cor_lat,seed_in)	! initializes fields to match a supplied power spectrum
+		call make_output(0.)	! output moved here for testing
+	enddo
+	call write_cor_lat()
+!  call init_fields(1.)	! initialize fields as in Minkowski space
+	call init_sites()	! randomly sample lattice sites at which to track trajectories
 !	call init_sites_hom()
 !	call read_sites()
 	call init_sample_zeta()
@@ -114,7 +127,7 @@ program lattice
   print*,"Field Initialization time :",dble(ti2-ti1)/clock_rate, tr2-tr1
 
   call cpu_time(tr1); call system_clock(ti1)
-  call make_output(0.)
+  !call make_output(0.)	! Commented out for testing
   call cpu_time(tr2); call system_clock(ti2,clock_rate)
   print*,"Initial Output Time :",dble(ti2-ti1)/clock_rate, tr2-tr1
 
@@ -151,6 +164,7 @@ program lattice
 
   call allocate_3d_fourier_array(nx,ny,nz,Fk2)
 	call allocate_3d_fourier_array(nx,ny,nz,Fk3)
+	call allocate_3d_fourier_array(nx,ny,nz,Fk4)
 	call allocate_3d_real_array(nx,ny,nz,ggrad1)
 	call allocate_3d_real_array(nx,ny,nz,ggrad2)
 	call allocate_3d_real_array(nx,ny,nz,ggrad3)
@@ -615,6 +629,7 @@ program lattice
 			open(unit=94,file="lat_sample.out")
 			!open(unit=92,file="lat_dump.out",form="unformatted") !TESTING REQUIRED! binary file of field output
 !			open(unit=93,file="sample_sites.out")
+			open(unit=91,file="init_spectrum.out")
 #ifdef THREEDIM
       call init_spectrum_3d(nx,ny,nz)
 #endif
@@ -630,7 +645,7 @@ program lattice
       real(dl) :: time
       integer :: i
       !real(dl) :: spec(ns,2*nfld+2)
-			real(dl) :: spec(ns,4*nfld+4)  !to spectum and cross spec for both fields and zeta spectrum
+			real(dl) :: spec(ns,(nfld*2)**2+4)  !to spectum and cross spec for both fields and zeta spectrum
 			!real(dl) :: spec(ns,2*(4*nfld+4)) !to spectrum and cross spec for both fields and zeta and difference 
 
 !      call write_fields(time)
@@ -649,14 +664,24 @@ program lattice
       Fk2=Fk
       laplace(IRANGE) = fldp(1,IRANGE)
       call spectrum_3d(spec(:,2), laplace, Fk, planf)
-      call crossspec_3d(Fk, Fk2, spec(:,3),spec(:,4))
+      call crossspec_3d(Fk, Fk2, spec(:,3),spec(:,4)) !check ordering for real vs imaginary parts
 ! two field model output
 			laplace(IRANGE) = fld(2,IRANGE)
-			call spectrum_3d(spec(:,5),laplace, Fk, planf)
-      Fk2=Fk
+			call spectrum_3d(spec(:,5),laplace, Fk3, planf)
+      Fk4=Fk3
       laplace(IRANGE) = fldp(2,IRANGE)
-      call spectrum_3d(spec(:,6), laplace, Fk, planf)
-			call crossspec_3d(Fk, Fk2, spec(:,7), spec(:,8))
+      call spectrum_3d(spec(:,6), laplace, Fk3, planf)
+			call crossspec_3d(Fk3, Fk4, spec(:,7), spec(:,8))
+! two field cross spectrum output
+			! crossspec takes ft'ed inputs, can avoid doing the same fft twice
+			! Fk - dphi
+			! Fk2 - phi
+			! Fk3 - dchi
+			! Fk4 - chi
+			call crossspec_3d(Fk2, Fk4, spec(:,13), spec(:,14)) !phi-chi
+			call crossspec_3d(Fk2, Fk3, spec(:,15), spec(:,16)) !phi-dchi
+			call crossspec_3d(Fk, Fk4, spec(:,17), spec(:,18)) !dphi-chi
+			call crossspec_3d(Fk, Fk3, spec(:,19), spec(:,20)) !dphi-dchi
 ! zeta spec output
 			laplace(IRANGE) = zeta_lat(IRANGE)
 			call spectrum_3d(spec(:,9), laplace, Fk, planf)
@@ -664,6 +689,8 @@ program lattice
 			laplace(IRANGE) = dzeta_lat(2,IRANGE)
 			call spectrum_3d(spec(:,10), laplace, Fk, planf)
 			call crossspec_3d(Fk, Fk2, spec(:,11), spec(:,12))
+
+			
 
 ! Spectrum of difference
 ! Untested, requires two modes of running, can have two verisions of this function that are toggled by either a precompiler
@@ -778,5 +805,290 @@ program lattice
 	subroutine tstep_adapt()
 		tstep = tstep0/yscl
 	end subroutine tstep_adapt
+
+	! Subroutine to take a radial profile of power spectrum and interpolate and use it to interpolate
+	! the power for the modes on the lattice
+!	subroutine interp_cor(cor)
+
+!	end subroutine interp_cor
+
+	! Subroutine which takes the 2-point correlation functions of fields and field momenta as input
+	! and generates random fields to match the 2-point correlation functions given.
+	! This will replace the subroutine init_fields
+	! The 2-point correlators need to be calculated separately, eg by integrating the mode functions
+	! to do: option for correct real-space/ Fourier-space 2-point correlation
+	! to do: set os (oversampling factor) as a precompiler so it can easily be passed around. Moved to correlator_mod
+	! to do: apply filter for Niquist frequency
+	! to do: the interpolation is interpolating the 2-point correlation, should maybe not interpolate on the square
+	subroutine init_fields_cor(cor)
+		!complex(dl), dimension(2*nfld,2*nfld,:) :: corr					! matrix of power spectrum for each (oversampled) mode
+		!complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,:) :: cor(:,:,:)
+		real(dl), dimension(2*nfld,2*nfld,:) :: cor(:,:,:)
+
+    !integer, parameter :: os = 16, nos = max(nx,ny,nz)*os**2	! over-sampling factor and new number of samples
+    !real, parameter :: dxos = dx/os, dkos = dk/(2*os)					! oversampled lattice spacing and mode spacing
+    complex, parameter :: w = (0._dl, twopi)									! i*2*pi, used for random phase
+
+    !real(dl) :: ker(nos), a(nnx), p(nnx)											! kernal, amplitude, phase
+		real(dl) :: ker(nos), a(2*nfld), p(2*nfld)								! kernal, amplitude, phase
+    integer, allocatable :: seed(:)														! rng variable
+    integer :: nseed																					! rng variable
+
+    integer :: i, j, k, n, m, l																! lattice location indicies/ matrix indicies, rounded radial distance
+    real(dl) :: kk																						! radial distance (real/momentum space)
+#ifdef THREEDIM
+    !real(dl), parameter :: norm = 0.5/(nvol*(twopi*dk**3)**0.5*mpl)*(dkos/dxos) ! double check that this is the correct value
+		real(dl), parameter :: norm = 2._dl*twopi*dkos / (dxos**2*nos*nvol)
+#endif
+		type(C_PTR) :: plan_sin																		! FFT plan
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,IRANGE) :: cor_interp							! Power spec interpolated to each Fourier mode on the lattice
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld) :: cor_fac												! factored power at a particular k mode							
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld) :: grv																		! vector of Gaussian random variables
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld) :: conv																	! vector of random variables matching given power spectrum
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,nnx,ny,nz) :: Fk_cor											! vector to hold DFT of fld1, fldp1, fld2, fldp2, ...
+
+		!!!!! Matching the power spectum !!!!!
+		! Interpolate correlation matrix
+		! make sine transform plan (used in interpolation)
+		plan_sin = fftw_plan_r2r_1d(nos,ker,ker,FFTW_RODFT10,ior(FFTW_ESTIMATE,FFTW_UNALIGNED))
+
+		do n = 1,2*nfld; do m = n,2*nfld ! loop over correlation matrix entries
+			do k = 1,nos; kk = (dble(k)-0.5)*dkos	! the -0.5 is due to the definition of the sine transform (FFTW_RODFT10)
+				ker(k) = kk*cor(n,m,k) * exp(-0.5*(kk/(KCUT_FAC*H0))**2)	! filter here, knows nothing on Niquist frequency
+			enddo
+			call fftw_execute_r2r(plan_sin, ker, ker)	! transform to real space (radial)
+			do k = 1,nos; ker(k) = norm * ker(k)/k; enddo	! normalize transform and insert 1/r factor
+
+		  FLOOP
+#ifdef THREEDIM
+      	kk = sqrt(real(i-nn)**2 + real(j-nn)**2 + real(k-nn)**2) * os	! calculate radial distance to the point (i,j,k)
+#endif
+#ifdef TWODIM
+        kk = sqrt(dble(i-nn)**2 + dble(j-nn)**2)
+#endif
+#ifdef ONEDIM
+        kk = sqrt(dble(i-nn)**2)
+#endif
+        l = floor(kk)	! round down radial distance to nearest sampled point
+            
+        if (l > 0) then
+					!corr_interp(n,m,LATIND) = ker(l) + (kk-l)*(ker(l+1)-ker(l))	! linear interpolation between nearest sample points
+        	laplace(LATIND) = ker(l) + (kk-l)*(ker(l+1)-ker(l))	! linear interpolation between nearest sample points
+        else
+#ifdef THREEDIM
+					!corr_interp(n,n,LATIND) = (4.0*ker(1)-ker(2))/3.0
+          laplace(LATIND) = (4.0*ker(1)-ker(2))/3.0
+#endif
+#ifdef TWODIM
+          laplace(LATIND) = (4.0*ker(1)-ker(2))/3.0  ! check this one
+#endif
+#ifdef ONEDIM
+          laplace(LATIND) =
+#endif
+            end if
+      FLOOPEND
+			call fftw_execute_dft_r2c(planf, laplace, Fk)
+			cor_interp(n,m,:,:,:) = Fk(:,:,:)
+		enddo; enddo
+		
+		! Initialize random number generator
+		call random_seed(SIZE=nseed)
+		print*, 'nseed = ', nseed
+    allocate(seed(nseed))
+    seed = 29*(/ (i-1, i=1,nseed) /)
+    call random_seed(PUT=seed)
+    deallocate(seed)
+
+		! Cholesky factorization of corr_interp
+		do i=1,nx; do j=1,ny; do k=1,nnz	! check ordering
+			do m = 1,2*nfld; do n = 1,2*nfld
+				if (n>=m) then
+					cor_fac(m,n) = cor_interp(m,n,LATIND)
+				else
+					cor_fac(m,n) = CONJG(cor_interp(n,m,LATIND))! Take Hermitian conjugate here
+				endif
+			enddo; enddo
+			print*, "i,j,k = ", i, j, k	! testing
+			do m=1,2*nfld	! testing
+				print*, cor_fac(m,:)
+			enddo
+			call zpotrf('L',2*nfld,cor_fac,2*nfld,l)
+			if (l /= 0) then
+				print*, "Factorization warning: l = ", l
+			endif
+			! Initialize GRV vector
+			call random_number(a); call random_number(p)	! a and p are length 2*nfld
+			grv(:) =	sqrt(-2.0*log(a)) * exp(w*p)
+			call zgemv('C', 2*nfld, 2*nfld, (1._dl,0._dl), cor_fac, 2*nfld, grv, 1, (0._dl,0._dl), conv, 1)
+			Fk_cor(:,LATIND) = conv(:)
+		enddo; enddo; enddo
+		
+		! Peform FFT to calculate fluctuations in real space
+		! Add fluctuations to homogeneous fields
+		! Check if /nvol is required
+		do m=1, nfld
+			Fk(:,:,:) = Fk_cor(2*m-1,:,:,:)
+			call fftw_execute_dft_c2r(planb, Fk, laplace)!!!!! fft to real space
+			fld(m,IRANGE) = fld0(m) + laplace(IRANGE)
+			Fk(:,:,:) = Fk_cor(2*m,:,:,:)
+			call fftw_execute_dft_c2r(planb, Fk, laplace)
+			fldp(m,IRANGE) = dfld0(m) + laplace(IRANGE)
+		enddo
+			
+		call fftw_destroy_plan(plan_sin)	! destroy FFT plan		
+
+		!!!!!!!! momentum space 2-point !!!!!!!!
+
+		! make FFT plan
+!		plan_sin = fftw_plan_r2r_1d(nos,ker,ker,FFTW_RODFT10,ior(FFTW_ESTIMATE,FFTW_UNALIGNED)) ! this is named plan_sin since it is a sine transform for real space 2-point correlator matching
+		! Perform interpolation on correlation matrix
+!		do n = 1,2*nfld; do m = n,2*nfld ! loop over correlation matrix entries
+!			do k = 1,nos
+!				ker(k) = corr(n,m,k)
+!			enddo
+			! Transform to real space and interpolate
+!    	call fftw_execute_r2r(plan_sin, ker, ker)
+!			ker = ker/nvol	! normalization factor for FFT
+			! Here is the interpolation part
+!			FLOOP
+!#ifdef THREEDIM
+!      	kk = sqrt(real(i-nn)**2 + real(j-nn)**2 + real(k-nn)**2) * os	! calculate radial distance in units of dxos, this misplaces the center.
+!#endif
+!				l = floor(kk)	! calculate radial distance to next lowest quantity for which ker is calculated
+!				if (l > 0) then
+!        	laplace(LATIND) = ker(l) + (kk-l)*(ker(l+1)-ker(l))	! linear interpolation
+!        else
+!#ifdef THREEDIM
+          !laplace(LATIND) = (4.0*ker(1)-ker(2))/3.0	! I don't know where this part comes from, need to figure that out and if it is correct here
+!					laplace(LATIND) = ker(1) - (kk-l)*(ker(2)-ker(1)) ! this is a linear extrapolation
+!#endif
+!			FLOOPEND
+			! Interpolation is done, real space result stored in laplace.
+
+			! Calculate Fourier space result
+!			call fftw_execute_dft_r2c(planf, laplace, Fk)
+			! Figure a way to store Fk so that the next correlation matrix entry can be calculated
+!			corr_interp(n,m,:,:,:) = Fk(:,:,:)
+			! Do the same using for Hermetian conjugate
+			
+!		enddo; enddo
+		! Remember there is a particular way entries are stored in r2c transforms
+
+		! Initialize random number generator
+!		call random_seed(SIZE=nseed)
+!		print*, 'nseed = ', nseed
+!    allocate(seed(nseed))
+!    seed = 29*(/ (i-1, i=1,nseed) /)
+!    call random_seed(PUT=seed)
+!    deallocate(seed)
+
+		! looping over each mode
+!		do k=1,nz; do j=1,ny; do i=1,nnx
+				! Decompose correlation matrix for each mode (need to declare decomposition matrix)
+
+				! Initialize GRV vector
+!				call random_number(a); call random_number(p)	! a and p are length 2*nfld
+!				grv(:) =	sqrt(-2.0*log(a)) * exp(w*p)
+				! Multiply GRV vector by decomposed correlation matrix mode by mode
+				! Result is a vector of length 2*nfld with Fourier space information for a single mode
+				! Store result for FFT
+!				Fk_cor(:,LATIND) = grv(:)
+!    enddo; enddo; enddo
+		
+!		do n=1, 2*nfld, 2
+			! Perform FFT on transformed GRV and add results to background field
+!			Fk(:,:,:) = Fk_cor(n,:,:,:)
+!			call fftw_execute_dft_c2r(planb, Fk, laplace)
+!			fld(n,IRANGE) = fld0(n) + laplace/nvol
+			! Repeat for momentum
+!			Fk(:,:,:) = Fk_cor(n+1,:,:,:)
+!			call fftw_execute_dft_c2r(planb, Fk, laplace)
+!			fldp(n,IRANGE) = dfld0(n) + laplace/nvol
+!		enddo	
+		
+		! loop over field indicies
+		!do n=1,2*nfld
+			! loop over modes
+		!	do j=1,ny; do k=1,nz
+		!		call random_number(a); call random_number(p) ! a and p are length nnx, so random number generates an array of length nnx
+				! Check normalization on Gaussian
+		!		norm_grv(n,:,j,k) =	sqrt(-2.0*log(a)) * exp(w*p)! the i component only goes to i=nnx do to the r2c transform reality condition
+		!	enddo; enddo
+		!enddo
+
+		! matrix multiplication on norm_grv ()
+	end subroutine init_fields_cor
+
+	! Subroutine which takes the 2-point correlation functions of fields and field momenta as input
+	! and generates random fields to match the 2-point correlation functions given.
+	! This will replace the subroutine init_fields
+	! The 2-point correlators need to be calculated separately, eg by integrating the mode functions
+	! to do: option for correct real-space/ Fourier-space 2-point correlation
+	! to do: apply filter
+	! to do: should make exception for k=0 mode to avoid factorization error
+	subroutine init_fields_cor2(cor_in, seed_in)
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,nnx,ny,nz) :: cor_in			! Input power/cross spectrum for each k on the lattice
+		integer :: seed_in
+
+    complex, parameter :: w = (0._dl, twopi)									! i*2*pi, used for random phase
+		real(dl) :: a(2*nfld), p(2*nfld)													! amplitude, phase
+    integer, allocatable :: seed(:)														! rng variable
+    integer :: nseed																					! rng variable
+
+    integer :: i, j, k, n, m, l																! lattice location indicies/ matrix indicies, check integer
+
+#ifdef THREEDIM
+    !real(dl), parameter :: norm = 0.5/(nvol*(twopi*dk**3)**0.5*mpl)*(dkos/dxos) ! double check that this is the correct value
+		!real(dl), parameter :: norm = 2._dl*twopi*dkos / (dxos**2*nos*nvol)
+#endif
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld) :: cor_fac												! factored power at a particular k mode		
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld) :: grv																		! vector of Gaussian random variables
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,nnx,ny,nz) :: Fk_cor											! vector to hold DFT of fld1, fldp1, fld2, fldp2, ...
+		
+		! Initialize random number generator
+		call random_seed(SIZE=nseed)
+		print*, 'nseed = ', nseed
+    allocate(seed(nseed))
+    !seed = 27*(/ (i-1, i=1,nseed) /)
+		seed = seed_in*(/ (i-1, i=1,nseed) /)
+    call random_seed(PUT=seed)
+    deallocate(seed)
+
+		! Cholesky factorization of power
+		do k=1,nz; do j=1,ny; do i=1,nnx
+			do m = 1,2*nfld; do n = 1,2*nfld
+				cor_fac(m,n) = cor_in(m,n,LATIND)
+			enddo; enddo
+			!call dpotrf('L',2*nfld,cor_fac,2*nfld,l)
+			call zpotrf('L',2*nfld,cor_fac,2*nfld,l)
+			if (l /= 0) then
+				print*, "Factorization warning: l = ", l
+			endif
+			! Initialize GRV vector
+			call random_number(a); call random_number(p)	! a and p are dimension 2*nfld
+			grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p)			! Removed factor of sqrt(2) from Box Mueller transform to normalize for complex grv
+			!print*, "grv norm= ", sqrt((grv*conjg(grv)))
+			do m = 1,2*nfld; do n = 1,2*nfld	! can do this with a where statement
+				if (n<m) then
+					cor_fac(n,m) = (0._dl,0._dl)
+				endif
+			enddo; enddo
+			call ztrmv('L','N','N', 2*nfld, cor_fac, 2*nfld, grv,  1)	! multiply random vector by transposed lower triangular factor of matrix
+			Fk_cor(:,LATIND) = grv(:)/nvol			
+		enddo; enddo; enddo
+		
+		! Peform FFT to calculate fluctuations in real space
+		! Add fluctuations to homogeneous fields
+		! Check if /nvol is required, nvol is used when initializing Fk_cor
+		do m=1, nfld
+			Fk(:,:,:) = Fk_cor(2*m-1,:,:,:)
+			call fftw_execute_dft_c2r(planb, Fk, laplace)!!!!! fft to real space
+			fld(m,IRANGE) = fld0(m) + laplace(IRANGE)
+			Fk(:,:,:) = Fk_cor(2*m,:,:,:)
+			call fftw_execute_dft_c2r(planb, Fk, laplace)
+			fldp(m,IRANGE) = dfld0(m) + laplace(IRANGE)
+		enddo
+
+	end subroutine init_fields_cor2
 
   end program lattice

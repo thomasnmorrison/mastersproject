@@ -10,6 +10,7 @@
 ! to do: add single field case
 ! to do: longitudinal instability
 ! to do: add precompiler statements for one field vs two field models, or do a call be inputs type thing
+! to do: write a subroutine to calculate the trace of the mass matrix
 
 module potential_mod
 #include "macros.h"
@@ -18,7 +19,8 @@ module potential_mod
 
   implicit none
 
-	integer, parameter :: potential_option = 5 ! parameter to choose the form of Delta_V
+	integer, parameter :: nfld=2
+	integer, parameter :: potential_option = 4 ! parameter to choose the form of Delta_V
 	! no phi-chi interaction: potential_option = 0
 	! trapped plus transverse instability: potential_option = 1
 	! transverse instability blip: potential_option = 2
@@ -33,10 +35,10 @@ module potential_mod
 	real(dl), parameter :: mpl=1.e3												! machine units conversion factor, moved from hampiltonian_conformal.f90
 	real(dl), parameter :: m2 = 1.0_dl										! inflaton mass
 	real(dl), parameter :: lambda_chi = 0.0_dl						! chi self interaction
-	real(dl), parameter :: phi_p = 3.2!*dsqrt(4.0*twopi)	! interaction potential characteristic phi value
+	real(dl), parameter :: phi_p = 3.1!*dsqrt(4.0*twopi)	! interaction potential characteristic phi value
 
 	! potential_option = 1 parameters
-	real(dl), parameter :: g2 = (1.e5)!/(4.*twopi)!1.e6											! phi-chi coupling strength
+	real(dl), parameter :: g2 = (1.25e4)!/(4.*twopi)!1.e6											! phi-chi coupling strength
 	real(dl), parameter :: beta2 = 0.!1.e-3*g2							! instability amplitude
 
 	! potential_option = 2 parameters
@@ -46,8 +48,8 @@ module potential_mod
 	real(dl), parameter :: c_2 = 1.0_dl/(2.0_dl*b_1**2)		! derived parameter for deltaV
 
 	! potential_option = 4 parameters
-	real(dl), parameter :: m2_inf = 4.*sqrt(2./3.)*sqrt((1.e5))!1.0_dl										! asymptotic squared mass of chi
-	real(dl), parameter :: m2_p =	0.0_dl											! minimum squared mass of chi (at phi=phi_p) 
+	real(dl), parameter :: m2_inf = 4.*sqrt(2./3.)*sqrt((1.e3))!1.0_dl										! asymptotic squared mass of chi
+	real(dl), parameter :: m2_p =	-50.*m2!0.0_dl											! minimum squared mass of chi (at phi=phi_p) 
 	! Derived parameters
 	real(dl), parameter :: c_3 = 2.*sqrt(3.*g2/(m2_inf-m2_p))
 	! Also set g2 under "potential_option = 1 parameters"
@@ -179,6 +181,36 @@ contains
 
 		modeldv = background_dV(f1,f2,ind) + Delta_dV(f1,f2,ind)
 	end function modeldv
+
+	! Function to calculate the trace of the mass matrix
+	function trace_m2(f1,f2)
+		real(dl) :: trace_m2
+		real(dl), intent(in) :: f1(:,:,:),f2(:,:,:)
+
+		real(dl), dimension(nfld) :: m2_infl
+		real(dl), dimension(nfld) :: m2_delta
+		real(dl) :: f1_hom, f2_hom
+		integer :: i
+
+		f1_hom = sum(f1(IRANGE)); f2_hom = sum(f2(IRANGE))
+
+		if (infl_option==1) then
+		elseif (infl_option==2) then
+			m2_infl(1) = m2
+			m2_infl(2) = 0.0
+		if (potential_option==1) then
+		elseif (potential_option==2) then
+		elseif (potential_option==3) then
+		elseif (potential_option==4) then
+			m2_delta(1) = (36.*g2)*f2_hom**2*((-2.*sinh(c_3*(f1_hom-phi_p))**2)/(5 + cosh(c_3*(f1_hom-phi_p))) + cosh(c_3*(f1_hom-phi_p)))/(5 + cosh(c_3*(f1_hom-phi_p)))**2
+			m2_delta(2) = (m2_inf - 6.*(m2_inf-m2_p) / (5.+dcosh(c_3*(f1_hom-phi_p))) )
+		elseif (potential_option==5) then
+			m2_delta(1) = 0.0
+			m2_delta(2) = m2_inf
+		endif; endif
+		
+		trace_m2 = sum(m2_infl) + sum(m2_delta) 
+	end function trace_m2
 
 end module potential_mod
 
