@@ -109,6 +109,7 @@ program lattice
 	! This loop is for testing field initialization, ordinarily only initialize fileds once
 	do seed_in=1,2**8
 		call init_fields_cor2(cor_lat,seed_in)	! initializes fields to match a supplied power spectrum
+		!call init_fields_ind(seed_in)	! initialize fields indepentently
 		call make_output(0.)	! output moved here for testing
 	enddo
 	call write_cor_lat()
@@ -1066,7 +1067,13 @@ program lattice
 			endif
 			! Initialize GRV vector
 			call random_number(a); call random_number(p)	! a and p are dimension 2*nfld
-			grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p)			! Removed factor of sqrt(2) from Box Mueller transform to normalize for complex grv
+			if (i==1 .and. j==1 .and. k==1) then
+				grv(:) = (0._dl,0._dl)
+			elseif (i==1 .or. i==nnx) then
+				grv(:) = (1._dl,0._dl)*sign(sqrt(-2._dl*log(a)),p-0.5_dl)
+			else
+				grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p)			! Removed factor of sqrt(2) from Box Mueller transform to normalize for complex grv
+			endif
 			!print*, "grv norm= ", sqrt((grv*conjg(grv)))
 			do m = 1,2*nfld; do n = 1,2*nfld	! can do this with a where statement
 				if (n<m) then
@@ -1090,5 +1097,67 @@ program lattice
 		enddo
 
 	end subroutine init_fields_cor2
+
+	! subroutine to initialize fields independently for testing purposes
+	! to do: the reality condition inforces that some of the entries to Fk_cor must be real, do this.
+	! to do: since this is the power spectrum of the fluctuations the zero k-mode must be set to zero
+	subroutine init_fields_ind(seed_in)
+		integer :: seed_in
+
+    complex, parameter :: w = (0._dl, twopi)									! i*2*pi, used for random phase
+		real(dl) :: a(2*nfld), p(2*nfld)													! amplitude, phase
+    integer, allocatable :: seed(:)														! rng variable
+    integer :: nseed																					! rng variable
+
+    integer :: i, j, k, n, m, l																! lattice location indicies/ matrix indicies, check integer
+
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld) :: cor_fac												! factored power at a particular k mode		
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld) :: grv																		! vector of Gaussian random variables
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,nnx,ny,nz) :: Fk_cor											! vector to hold DFT of fld1, fldp1, fld2, fldp2, ...
+		
+		! Initialize random number generator
+		call random_seed(SIZE=nseed)
+		print*, 'nseed = ', nseed
+    allocate(seed(nseed))
+    !seed = 27*(/ (i-1, i=1,nseed) /)
+		seed = seed_in*(/ (i-1, i=1,nseed) /)
+    call random_seed(PUT=seed)
+    deallocate(seed)
+
+		! Initialize power spectrum (independent fields, uniform power)
+		do k=1,nz; do j=1,ny; do i=1,nnx
+			! Initialize GRV vector
+			call random_number(a); call random_number(p)	! a and p are dimension 2*nfld
+			!grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p)			! Removed factor of sqrt(2) from Box Mueller transform to normalize for complex grv
+			if (k==1 .and. j==1 .and. i==1) then
+				grv(:) = (0._dl, 0._dl)
+			elseif (i==1 .or. i==nnx) then
+				grv(:) = (1._dl, 0._dl)
+			else
+				grv(:) =	(0._dl, 1._dl)!* exp(w*p)																! Amplitudes set to 1 for testing, phase set to 0
+			endif
+			Fk_cor(:,LATIND) = grv(:)/nvol			
+		enddo; enddo; enddo
+			!Fk_cor(:,:,:,:) = (1._dl,0._dl)/nvol
+
+		
+		! Peform FFT to calculate fluctuations in real space
+		! Add fluctuations to homogeneous fields
+		! Check if /nvol is required, nvol is used when initializing Fk_cor
+		do m=1, nfld
+			Fk(:,:,:) = Fk_cor(2*m-1,:,:,:)
+			!Fk(:,:,:) = (1._dl, 1._dl)/nvol
+			!print*,"before:",Fk(3,:,:)
+			call fftw_execute_dft_c2r(planb, Fk, laplace)!!!!! fft to real space
+			fld(m,IRANGE) = fld0(m) + laplace(IRANGE)
+			call fftw_execute_dft_r2c(planf, laplace, Fk)
+			!print*,"after:", Fk(3,:,:)
+			Fk(:,:,:) = Fk_cor(2*m,:,:,:)
+			!Fk(:,:,:) = (0._dl, 1._dl)/nvol
+			call fftw_execute_dft_c2r(planb, Fk, laplace)
+			fldp(m,IRANGE) = dfld0(m) + laplace(IRANGE)
+		enddo
+
+	end subroutine init_fields_ind
 
   end program lattice

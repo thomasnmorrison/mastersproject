@@ -121,35 +121,35 @@ contains
 				if (rad2 == 0._dl) then
 					do n=1,nfld
 						! field-field
-						cor_lat(2*n-1,2*n-1,LATIND) = 0.5_dl*(1._dl,0._dl)
+						cor_lat(2*n-1,2*n-1,LATIND) = 1._dl*(1._dl,0._dl)
 						! field-momentum
 						cor_lat(2*n-1,2*n,LATIND) = 0._dl*(1._dl,0._dl)
 						cor_lat(2*n,2*n-1,LATIND) = cor_lat(2*(n-1),2*n,LATIND)
 						! momentum-momentum
-						cor_lat(2*n,2*n,LATIND) = 0.5_dl*(1._dl,0._dl)
+						cor_lat(2*n,2*n,LATIND) = 1._dl*(1._dl,0._dl)
 					enddo
 				elseif (rad2 <= hub**2) then
 					do n=1,nfld
 						! field-field
 						!cor_lat(2*n-1,2*n-1,LATIND) = 0.5_dl*(1._dl + hub**2/rad2)/(sqrt(rad2)*mpl**2)
-						cor_lat(2*n-1,2*n-1,LATIND) = 0.5_dl*(1._dl,0._dl)	! TESTING
+						cor_lat(2*n-1,2*n-1,LATIND) = (1._dl,0._dl)/sqrt(rad2)**3	! TESTING
 						! field-momentum
 						!cor_lat(2*n-1,2*n,LATIND) = -0.5_dl*(rad2+m2_diag(n))/(3._dl*hub)*(1._dl + hub**2/rad2)/(sqrt(rad2)*mpl**2)
 						!cor_lat(2*n,2*n-1,LATIND) = cor_lat(2*n-1,2*n,LATIND)
-						cor_lat(2*n-1,2*n,LATIND) = 0._dl*(1._dl,0._dl)	! TESTING
-						cor_lat(2*n,2*n-1,LATIND) = 0._dl*(1._dl,0._dl)	! TESTING
+						cor_lat(2*n-1,2*n,LATIND) = 0.5_dl*(1._dl,0._dl)/sqrt(rad2)**3	! TESTING
+						cor_lat(2*n,2*n-1,LATIND) = 0.5_dl*(1._dl,0._dl)/sqrt(rad2)**3	! TESTING
 						! momentum-momentum
 						!cor_lat(2*n,2*n,LATIND) = 0.5_dl*((rad2+m2_diag(n))/(3._dl*hub))**2*(1._dl + hub**2/rad2)/(sqrt(rad2)*mpl**2)
-						cor_lat(2*n,2*n,LATIND) = 0.5_dl*(1._dl,0._dl)	! TESTING
+						cor_lat(2*n,2*n,LATIND) = (1._dl,0._dl)/sqrt(rad2)**3	! TESTING
 					enddo
 				else
 					do n=1,nfld	
 						! field-field
 						!cor_lat(2*n-1,2*n-1,LATIND) = 0.5_dl*(rad2+m2_diag(n))**-0.5/(mpl**2)
-						cor_lat(2*n-1,2*n-1,LATIND) = 0.5_dl*(1._dl,0._dl)	! TESTING
+						cor_lat(2*n-1,2*n-1,LATIND) = (1._dl,0._dl)/sqrt(rad2)	! TESTING
 						! momentum-momentum
 						!cor_lat(2*n,2*n,LATIND) = 2.0_dl*(rad2+m2_diag(n))**0.5/(mpl**2)
-						cor_lat(2*n,2*n,LATIND) = 0.5_dl*(1._dl,0._dl)	! TESTING
+						cor_lat(2*n,2*n,LATIND) = sqrt(rad2)*(1._dl,0._dl)	! TESTING
 					enddo
 				end if				
 			enddo
@@ -184,6 +184,7 @@ contains
     real(dl) :: p, c(2), W(2*nfld,2*nfld,ns)
     integer :: l
 		integer :: m,n
+		integer, parameter :: bin_rule = 0
 
     W = 0.
     S = 0.
@@ -193,10 +194,16 @@ contains
     do k=1,nz; if (k<=nnz) then; kk=k-1; else; kk=nz+1-k; endif
     do j=1,ny; if (j<=nny) then; jj=j-1; else; jj=ny+1-j; endif
     do i=1,nx; if (i<=nnx) then; ii=i-1; else; ii=nx+1-i; endif	! include negative momentum modes on x
-    	p = sqrt(dble(ii**2 + jj**2 + kk**2)); l=floor(p)
-    	c = (1.0 - (/l-p,l+1-p/)**2)**2
-			S(m,n,l+1:l+2) = S(m,n,l+1:l+2) + c*real(cor_lat(m,n,ii+1,j,k))
-    	W(m,n,l+1:l+2) = W(m,n,l+1:l+2) + c
+			if (bin_rule==0) then
+    		p = sqrt(dble(ii**2 + jj**2 + kk**2)); l=floor(p)
+    		c = (1.0 - (/l-p,l+1-p/)**2)**2
+				S(m,n,l+1:l+2) = S(m,n,l+1:l+2) + c*real(cor_lat(m,n,ii+1,j,k))
+    		W(m,n,l+1:l+2) = W(m,n,l+1:l+2) + c
+			! if using the floor routine
+			else
+				p = sqrt(dble(ii**2 + jj**2 + kk**2)); l=floor(p)
+				S(m,n,l+1) = real(cor_lat(m,n,ii+1,j,k))
+			endif
     enddo
     enddo
     enddo
