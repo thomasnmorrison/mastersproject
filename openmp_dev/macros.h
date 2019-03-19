@@ -1,7 +1,9 @@
 #define SPECTRAL 1
 !#define DISCRETE 1
 
-#define RENORM 0
+!#define RENORM 0
+#define ONEFLD 1
+!#define TWOFLD 1
 
 #define WINT 1
 

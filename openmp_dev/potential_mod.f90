@@ -7,7 +7,6 @@
 
 ! to do: remove definition of potential and modeldv from hamiltonian
 ! to do: add the ability to define multiple phi_p for multiple interactions
-! to do: add single field case
 ! to do: longitudinal instability
 ! to do: add precompiler statements for one field vs two field models, or do a call be inputs type thing
 ! to do: write a subroutine to calculate the trace of the mass matrix
@@ -19,8 +18,12 @@ module potential_mod
 
   implicit none
 
+#ifdef ONEFLD
+	integer, parameter :: nfld=1
+#elif TWOFLD
 	integer, parameter :: nfld=2
-	integer, parameter :: potential_option = 4 ! parameter to choose the form of Delta_V
+#endif
+	integer, parameter :: potential_option = 0 ! parameter to choose the form of Delta_V
 	! no phi-chi interaction: potential_option = 0
 	! trapped plus transverse instability: potential_option = 1
 	! transverse instability blip: potential_option = 2
@@ -71,6 +74,18 @@ contains
 		endif
   end function background_V
 
+	! Function to calculate the background potential for 1 field models
+	elemental function background_V_1fld(f1)
+		real(dl) :: background_V_1fld
+		real(dl), intent(in) :: f1
+
+		if (infl_option==1) then
+			background_V_1fld = 0.25_dl*f1**4
+		elseif (infl_option==2) then
+			background_V_1fld = 0.5_dl*m2*f1**2
+		endif
+	end function background_V_1fld
+
 	! Function to calculate derivatives of the background potential
 	elemental function background_dV(f1,f2,ind)
     real(dl) :: background_dV
@@ -91,6 +106,18 @@ contains
 			endif
 		endif
   end function background_dV
+
+	! Function to calculate derivative of background potential for 1 field models
+	elemental function background_dV_1fld(f1)
+		real(dl) :: background_dV_1fld
+		real(dl), intent(in) :: f1
+
+		if (infl_option==1) then
+			background_dV_1fld = f1**3
+		elseif (infl_option==2) then
+			background_dV_1fld = m2*f1
+		endif
+	end function background_dV_1fld
 
 	! Function to calculate the interaction potential
 	elemental function Delta_V(f1,f2)
@@ -173,6 +200,19 @@ contains
 		potential = background_V(f1,f2)+Delta_V(f1,f2)
 	end function potential
 
+	! Dev function to wrap both 1 field and 2 field potential functions
+	elemental function potential_test(f1,f2)
+		real(dl) :: potential_test
+		real(dl), intent(in) :: f1
+		real(dl), optional, intent(in) :: f2
+
+		if (present(f2)) then
+			potential_test = background_V(f1,f2)+Delta_V(f1,f2) ! 2 field case
+		else
+			potential_test = background_V_1fld(f1)	! 1 field case
+		endif
+	end function potential_test
+
 	! Function to sum derivatived of the background and interaction potentials and be called from outside this module
 	elemental function modeldv(f1,f2,ind)
     real(dl) :: modeldv
@@ -181,6 +221,21 @@ contains
 
 		modeldv = background_dV(f1,f2,ind) + Delta_dV(f1,f2,ind)
 	end function modeldv
+
+	! Dev function to wrap 1 field and 2 field potential derivatives
+	! n.b. rearranged order of arguments
+	elemental function modeldv_test(ind,f1,f2)
+		real(dl) :: modeldv_test
+		real(dl), intent(in) :: f1
+		integer, intent(in) :: ind
+		real(dl), optional, intent(in) :: f2
+		
+		if (present(f2)) then
+			modeldv_test = background_dV(f1,f2,ind) + Delta_dV(f1,f2,ind)
+		else
+			modeldv_test = background_dV_1fld(f1)
+		endif
+	end function modeldv_test
 
 	! Function to calculate the trace of the mass matrix
 	function trace_m2(f1,f2)

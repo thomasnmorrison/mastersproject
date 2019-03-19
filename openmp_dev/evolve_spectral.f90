@@ -30,6 +30,7 @@
 ! to do: output file with the run parameters, may be best to output his to terminal so the Niagara job output file contains this information as it is uniquely named
 ! to do: make a precompiler statement for choosing how rho is remormalized
 ! to do: make a precompiler for how fields are initialized
+! to do: make a preprocessor for output format in rho dump
 
 program lattice
 #include "macros.h"
@@ -48,9 +49,9 @@ program lattice
   implicit none
 ! Time Stepping Properties
   integer :: j, jj
-  integer, parameter :: nstep = 0!2**0!2**11!2**12
-  integer, parameter :: stepsize = 2**3
-  real(dl), parameter :: tstep0 = 1.0_dl/(2.0_dl**15)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
+  integer, parameter :: nstep = 2**9!2**0!2**11!2**12
+  integer, parameter :: stepsize = 2**4
+  real(dl), parameter :: tstep0 = 1.0_dl/(2.0_dl**12)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
 	real(dl) :: tstep = tstep0 ! time step which is updated
 	real(dl) :: t_cur = 0.0 ! tracks the elapsed conformal time
 !  real(dl), parameter :: tstep = 0.05
@@ -105,13 +106,15 @@ program lattice
   call init_output()
 
 ! initialize fields	
-	call slow_roll_cor_lat(H0)			! specific routine to provide an initial power spectrum
+	!call slow_roll_cor_lat(H0)			! specific routine to provide an initial power spectrum
+	call mink_cor_lat()
 	! This loop is for testing field initialization, ordinarily only initialize fileds once
-	do seed_in=1,2**8
-		call init_fields_cor2(cor_lat,seed_in)	! initializes fields to match a supplied power spectrum
+	!do seed_in=1,2**8
+	do seed_in=1,2**4		
+	call init_fields_cor2(cor_lat,seed_in)	! initializes fields to match a supplied power spectrum
 		!call init_fields_ind(seed_in)	! initialize fields indepentently
-		call make_output(0.)	! output moved here for testing
-	enddo
+		!call make_output(0.)	! output moved here for testing
+	!enddo
 	call write_cor_lat()
 !  call init_fields(1.)	! initialize fields as in Minkowski space
 	call init_sites()	! randomly sample lattice sites at which to track trajectories
@@ -136,6 +139,8 @@ program lattice
 	!initialize dzeta
 	call get_dzeta([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)
 !	zeta = 0.0_dl
+	t_cur = 0.0_dl
+	call make_output(0._dl)
   do j=1,nstep
      print*,"step ", j
      !call symp6(tstep, stepsize)
@@ -148,6 +153,7 @@ program lattice
      !call make_output(j*stepsize*tstep)
 		 call make_output(t_cur)
   enddo
+	enddo
   call cpu_time(tr2); call system_clock(ti2,clock_rate)
   print*,"Total Evolution Time :",dble(ti2-ti1)/clock_rate, tr2-tr1
 
@@ -368,7 +374,7 @@ program lattice
       !  	 call sample(0.25, 3.*fld0(1)**2)
       !  	 fldp(j,IRANGE) = dfld0(j) + laplace
       !enddo
-
+#ifdef TWOFLD
 			! This initializing routine uses m2eff calculated for chi0 = 0, if chi0 != 0 the mass matrix is not diagonal.
 			! Should check that for the fluctuations produced using the mean field of chi is valid.
 			!	Initialize phi field
@@ -412,7 +418,7 @@ program lattice
       	call sample(0.25, m2_inf)
       	fldp(2,IRANGE) = dfld0(2) + laplace !temporarily taken out fluctuations			
 			endif
-
+#endif
       yscl = 1.
       call calc_metric()
     end subroutine init_fields
@@ -474,7 +480,7 @@ program lattice
 #endif
 
 #ifdef VECTORIZE
-      PE = sum(potential(fld(1,IRANGE),fld(2,IRANGE))) !sum(potential(fld(1,IRANGE))) !
+      PE = sum(potential_test(fld(1,IRANGE)))!sum(potential(fld(1,IRANGE),fld(2,IRANGE))) !sum(potential(fld(1,IRANGE))) !
       KE = sum(fldp(:,IRANGE)**2)
 #endif
 #ifdef LOOPEVOLVE
@@ -515,9 +521,15 @@ program lattice
 !      mom = mom / nlat
 
 #ifdef THREEDIM
+#ifdef ONEFLD
       write(98,'(30(ES22.15,2X))') time, acur, rho, KE, PE, GE, grav_energy(), &
            (rho+grav_energy())/rho, -ysclp**2/12._dl/acur**4, &
-           sum(fld(1,IRANGE))/nvol, sum(fld(2,IRANGE))/nvol, sum(fldp(1,IRANGE))/nvol, sum(fldp(2,IRANGE))/nvol !Commented out last output, was for two field model
+           sum(fld(1,IRANGE))/nvol, sum(fldp(1,IRANGE))/nvol
+#elif TWOFLD
+			write(98,'(30(ES22.15,2X))') time, acur, rho, KE, PE, GE, grav_energy(), &
+           (rho+grav_energy())/rho, -ysclp**2/12._dl/acur**4, &
+           sum(fld(1,IRANGE))/nvol, sum(fldp(1,IRANGE))/nvol, sum(fld(2,IRANGE))/nvol, sum(fldp(2,IRANGE))/nvol
+#endif
 #endif
 #ifdef TWODIM
       write(98,*) time, rho, KE, PE, GE, grav_energy(), sum(fld(1,:,:))/nvol, sum(fld(2,:,:))/nvol
@@ -532,7 +544,7 @@ program lattice
 !
 ! Randomly sample a gaussian random field with the appropriate spectrum
 !
-#define KCUT_FAC 12.
+#define KCUT_FAC 2.
     subroutine sample(gamma, m2eff, spec)
 !      real(C_DOUBLE), pointer :: f(:,:,:)
       real(dl) :: gamma
@@ -660,19 +672,68 @@ program lattice
 
 !      laplace(IRANGE) = fld(2,IRANGE) !commented out due to being for two field model
 #ifdef THREEDIM
-      laplace(IRANGE) = fld(1,IRANGE)
-      call spectrum_3d(spec(:,1),laplace, Fk, planf)
-      Fk2=Fk
-      laplace(IRANGE) = fldp(1,IRANGE)
-      call spectrum_3d(spec(:,2), laplace, Fk, planf)
-      call crossspec_3d(Fk, Fk2, spec(:,3),spec(:,4)) !check ordering for real vs imaginary parts
+      !laplace(IRANGE) = fld(1,IRANGE)
+      !call spectrum_3d(spec(:,1),laplace, Fk, planf)
+      !Fk2=Fk
+      !laplace(IRANGE) = fldp(1,IRANGE)
+      !call spectrum_3d(spec(:,2), laplace, Fk, planf)
+      !call crossspec_3d(Fk, Fk2, spec(:,3),spec(:,4)) !check ordering for real vs imaginary parts
+! one field zeta spec output
+			!laplace(IRANGE) = zeta_lat(IRANGE)
+			!call spectrum_3d(spec(:,5), laplace, Fk, planf)
+			!Fk2=Fk
+			!laplace(IRANGE) = dzeta_lat(2,IRANGE)
+			!call spectrum_3d(spec(:,6), laplace, Fk, planf)
+			!call crossspec_3d(Fk, Fk2, spec(:,7), spec(:,8))
+! two field model output
+			!laplace(IRANGE) = fld(2,IRANGE)
+			!call spectrum_3d(spec(:,5),laplace, Fk3, planf)
+      !Fk4=Fk3
+      !laplace(IRANGE) = fldp(2,IRANGE)
+      !call spectrum_3d(spec(:,6), laplace, Fk3, planf)
+			!call crossspec_3d(Fk3, Fk4, spec(:,7), spec(:,8))
+! two field cross spectrum output
+			! crossspec takes ft'ed inputs, can avoid doing the same fft twice
+			! Fk - dphi
+			! Fk2 - phi
+			! Fk3 - dchi
+			! Fk4 - chi
+			!call crossspec_3d(Fk2, Fk4, spec(:,13), spec(:,14)) !phi-chi
+			!call crossspec_3d(Fk2, Fk3, spec(:,15), spec(:,16)) !phi-dchi
+			!call crossspec_3d(Fk, Fk4, spec(:,17), spec(:,18)) !dphi-chi
+			!call crossspec_3d(Fk, Fk3, spec(:,19), spec(:,20)) !dphi-dchi
+! zeta spec output
+			!laplace(IRANGE) = zeta_lat(IRANGE)
+			!call spectrum_3d(spec(:,9), laplace, Fk, planf)
+			!Fk2=Fk
+			!laplace(IRANGE) = dzeta_lat(2,IRANGE)
+			!call spectrum_3d(spec(:,10), laplace, Fk, planf)
+			!call crossspec_3d(Fk, Fk2, spec(:,11), spec(:,12))
+
+! zeta spec output
+			laplace(IRANGE) = zeta_lat(IRANGE)
+			call spectrum_3d(spec(:,1), laplace, Fk, planf)
+			Fk2=Fk
+			laplace(IRANGE) = dzeta_lat(2,IRANGE)
+			call spectrum_3d(spec(:,2), laplace, Fk, planf)
+			call crossspec_3d(Fk, Fk2, spec(:,3), spec(:,4))
+! field spec output
+			do i=1,1
+      	laplace(IRANGE) = fld(i,IRANGE)
+      	call spectrum_3d(spec(:,4*i+1),laplace, Fk, planf)
+      	Fk2=Fk
+      	laplace(IRANGE) = fldp(i,IRANGE)
+      	call spectrum_3d(spec(:,4*i+2), laplace, Fk, planf)
+      	call crossspec_3d(Fk, Fk2, spec(:,4*i+3),spec(:,4*i+4)) !check ordering for real vs imaginary parts
+			enddo
+#ifdef TWOFLD
 ! two field model output
 			laplace(IRANGE) = fld(2,IRANGE)
-			call spectrum_3d(spec(:,5),laplace, Fk3, planf)
+			call spectrum_3d(spec(:,9),laplace, Fk3, planf)
       Fk4=Fk3
       laplace(IRANGE) = fldp(2,IRANGE)
-      call spectrum_3d(spec(:,6), laplace, Fk3, planf)
-			call crossspec_3d(Fk3, Fk4, spec(:,7), spec(:,8))
+      call spectrum_3d(spec(:,10), laplace, Fk3, planf)
+			call crossspec_3d(Fk3, Fk4, spec(:,11), spec(:,12))
 ! two field cross spectrum output
 			! crossspec takes ft'ed inputs, can avoid doing the same fft twice
 			! Fk - dphi
@@ -682,16 +743,8 @@ program lattice
 			call crossspec_3d(Fk2, Fk4, spec(:,13), spec(:,14)) !phi-chi
 			call crossspec_3d(Fk2, Fk3, spec(:,15), spec(:,16)) !phi-dchi
 			call crossspec_3d(Fk, Fk4, spec(:,17), spec(:,18)) !dphi-chi
-			call crossspec_3d(Fk, Fk3, spec(:,19), spec(:,20)) !dphi-dchi
-! zeta spec output
-			laplace(IRANGE) = zeta_lat(IRANGE)
-			call spectrum_3d(spec(:,9), laplace, Fk, planf)
-			Fk2=Fk
-			laplace(IRANGE) = dzeta_lat(2,IRANGE)
-			call spectrum_3d(spec(:,10), laplace, Fk, planf)
-			call crossspec_3d(Fk, Fk2, spec(:,11), spec(:,12))
-
-			
+			call crossspec_3d(Fk, Fk3, spec(:,19), spec(:,20)) !dphi-dchi			 	
+#endif
 
 ! Spectrum of difference
 ! Untested, requires two modes of running, can have two verisions of this function that are toggled by either a precompiler
@@ -1037,6 +1090,8 @@ program lattice
     integer :: nseed																					! rng variable
 
     integer :: i, j, k, n, m, l																! lattice location indicies/ matrix indicies, check integer
+		integer :: ii,jj,kk																				! mode numbers used for filtering
+		real(dl), parameter :: kcut = KCUT_FAC*(min(nnx,nny,nnz)-1)	!	frequency filtering	
 
 #ifdef THREEDIM
     !real(dl), parameter :: norm = 0.5/(nvol*(twopi*dk**3)**0.5*mpl)*(dkos/dxos) ! double check that this is the correct value
@@ -1057,6 +1112,9 @@ program lattice
 
 		! Cholesky factorization of power
 		do k=1,nz; do j=1,ny; do i=1,nnx
+			if (k>nnz) then; kk = nz+1-k; else; kk=k-1; endif
+			if (j>nny) then; jj = ny+1-j; else; jj=j-1; endif
+			ii = i-1
 			do m = 1,2*nfld; do n = 1,2*nfld
 				cor_fac(m,n) = cor_in(m,n,LATIND)
 			enddo; enddo
@@ -1081,7 +1139,7 @@ program lattice
 				endif
 			enddo; enddo
 			call ztrmv('L','N','N', 2*nfld, cor_fac, 2*nfld, grv,  1)	! multiply random vector by transposed lower triangular factor of matrix
-			Fk_cor(:,LATIND) = grv(:)/nvol			
+			Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj*2+kk**2)/(kcut**2))			
 		enddo; enddo; enddo
 		
 		! Peform FFT to calculate fluctuations in real space
@@ -1096,6 +1154,8 @@ program lattice
 			fldp(m,IRANGE) = dfld0(m) + laplace(IRANGE)
 		enddo
 
+		yscl = 1._dl
+    call calc_metric()
 	end subroutine init_fields_cor2
 
 	! subroutine to initialize fields independently for testing purposes
@@ -1157,7 +1217,9 @@ program lattice
 			call fftw_execute_dft_c2r(planb, Fk, laplace)
 			fldp(m,IRANGE) = dfld0(m) + laplace(IRANGE)
 		enddo
-
+		
+		yscl = 1.
+    call calc_metric()
 	end subroutine init_fields_ind
 
   end program lattice

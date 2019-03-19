@@ -24,12 +24,17 @@ module Hamiltonian
 
 	!real(dl), parameter :: infl=4.1_dl !inflation parameter y
 
-  real(dl), parameter :: phi0 = 3.2_dl + 0.25_dl!sqrt(0.8164/sqrt(g2))!7.511816626277513_dl!2.3393837654714997732962993666073! infl*2.309401076758!7.502897008008175! !		
-  real(dl), parameter :: dphi0 = -0.8164_dl!-dsqrt(2.0_dl/3.0_dl)!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
+  real(dl), parameter :: phi0 = 3.4_dl! + 0.25_dl!sqrt(0.8164/sqrt(g2))!7.511816626277513_dl!2.3393837654714997732962993666073! infl*2.309401076758!7.502897008008175! !		
+  real(dl), parameter :: dphi0 = -dsqrt(2.0_dl/3.0_dl)!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
   real(dl), parameter :: chi0 = 0.0_dl !-3.38704185098e-7!3.9e-7 !
-  real(dl), parameter :: H0 = 1.408!1.306_dl !6.6599_dl!phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !				
-  real(dl), parameter, dimension(nfld) :: fld0 = (/0._dl,0._dl/)!(/phi0,chi0/)!(/phi0/)!
-  real(dl), parameter, dimension(nfld) :: dfld0 = (/0._dl,0._dl/)!(/dphi0,0.0_dl/)!(/dphi0/)!
+  real(dl), parameter :: H0 = 1.388_dl !6.6599_dl!phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !	
+#ifdef ONEFLD			
+  real(dl), parameter, dimension(nfld) :: fld0 = (/phi0/)!(/0._dl,0._dl/)!(/phi0,chi0/)!
+	real(dl), parameter, dimension(nfld) :: dfld0 = (/dphi0/)!(/0._dl,0._dl/)!(/dphi0,0.0_dl/)!
+#elif TWOFLD
+	real(dl), parameter, dimension(nfld) :: fld0 = (/phi0,chi0/)
+	real(dl), parameter, dimension(nfld) :: dfld0 = (/dphi0,0.0_dl/)
+#endif  
 
   integer, parameter :: n_Hamiltonian_terms = 3
 
@@ -160,8 +165,9 @@ contains
 
 #ifdef VECTORIZE
        fldp(l,IRANGE) = fldp(l,IRANGE) +  &
-            dt * (yscl**2*laplace(IRANGE) -  yscl**4*modeldv(fld(1,IRANGE),fld(2,IRANGE),l) ) ! call for a two-field model
-!            dt * (yscl**2*laplace(IRANGE) - yscl**4*modeldv(fld(1,IRANGE),l)) 
+!            dt * (yscl**2*laplace(IRANGE) -  yscl**4*modeldv(fld(1,IRANGE),fld(2,IRANGE),l) ) ! call for a two-field model
+!            dt * (yscl**2*laplace(IRANGE) - yscl**4*modeldv(fld(1,IRANGE),l))
+ 						 dt * (yscl**2*laplace(IRANGE) - yscl**4*modeldv_test(l,fld(1,IRANGE)))
        GE2 = GE2 - sum(fld(l,IRANGE)*laplace(IRANGE))
 #endif
 #ifdef LOOPEVOLVE
@@ -176,8 +182,9 @@ contains
 #endif
     enddo ! end of loop over fields
 #ifdef VECTORIZE
-    PE = sum(potential(fld(1,IRANGE),fld(2,IRANGE))) ! call for two-field model
+!    PE = sum(potential(fld(1,IRANGE),fld(2,IRANGE))) ! call for two-field model
 !    PE = sum(potential(fld(1,IRANGE)))
+		 PE = sum(potential_test(fld(1,IRANGE)))
 #endif
 #ifdef LOOPEVOLVE
     PE = 0.
@@ -204,7 +211,7 @@ contains
       lap(:) = STENCIL(b,LAPLACIAN)
       do l=1,nfld
          m2(l) = modeldv(fld(1,LATIND),fld(2,LATIND),l) ! for two field model
-!         m2(l) = modeldv(fld(1,LATIND),l)
+!         m2(l) = modeldv(fld(1,LATIND),ind=l)
       enddo
       fldp(:,LATIND) = fldp(:,LATIND) + yscl**4*dt*(lap(:) - m2(:))
       GE2 = GE2 - sum(fld(:,LATIND)*lap(:))
@@ -352,8 +359,9 @@ contains
 
     KE = sum(fldp(:,IRANGE)**2)
     KE = 0.5*KE*kinetic_norm()/nvol
-    PE = sum(potential(fld(1,IRANGE),fld(2,IRANGE)))  ! two field call
+!    PE = sum(potential(fld(1,IRANGE),fld(2,IRANGE)))  ! two field call
 !    PE = sum(potential(fld(1,IRANGE)))
+		 PE = sum(potential_test(fld(1,IRANGE)))
     PE = PE / nvol
 
 #ifdef SPECTRAL
