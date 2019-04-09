@@ -158,6 +158,156 @@ contains
 	
 	end subroutine slow_roll_cor_lat
 
+	! Subroutine to initialize a correlation matrix for the Minkowski space vacuum fluctuations
+	! n.b. the correlation matrix that is initialized here will have the same value as the initial
+	! spectrum, ie. all normalizations must match between the two.
+	subroutine mink_cor_lat()
+		integer :: i,j,k		!	lattice indicies
+		integer :: ii,jj,kk	! fourier modes
+		integer :: m,n			! field indicies 
+		real(dl) :: rad2		! comoving wavenumber (double check the units)
+
+		cor_lat(:,:,:,:,:) = 0._dl*(1._dl,0._dl)	! initialize zero power in all modes
+		call init_m2_diag()												! initialize mass matrix
+
+		! Loop over all modes on the lattice and set power
+		do k=1,nz; if (k>nnz) then; kk = nz+1-k; else; kk=k-1; endif
+		do j=1,ny; if (j>nny) then; jj = ny+1-j; else; jj=j-1; endif
+			do i=1,nnx
+				rad2 = dble((i-1)**2) + dble(jj**2) + dble(kk**2)
+				rad2 = rad2*dk**2
+				do n=1,nfld
+					cor_lat(2*n-1,2*n-1,LATIND) = (1._dl,0._dl)/(2._dl*sqrt(rad2 + m2_diag(n))*mpl**2)	! field-field
+					cor_lat(2*n,2*n,LATIND) = (1._dl,0._dl)*sqrt(rad2 + m2_diag(n))/(2._dl*mpl**2)			! momentum-momentum
+				enddo
+			enddo
+		enddo
+		enddo
+
+		cor_lat = nvol**2*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
+	end subroutine mink_cor_lat
+
+	! Subroutine to intitialize a correlation matrix for the Minkowski space vacuum fluctuations squeezed in the pi
+	! direction or phi direction.
+	subroutine mink_cor_lat_scale(fld_scl, dfld_scl)
+		real(dl) :: fld_scl		! factor by which field fluctuation power is scaled
+		real(dl) :: dfld_scl	! factor by which momentum fluctuation power is scaled
+		integer :: i,j,k			!	lattice indicies
+		integer :: ii,jj,kk		! fourier modes
+		integer :: m,n				! field indicies 
+		real(dl) :: rad2			! comoving wavenumber (double check the units)
+
+		cor_lat(:,:,:,:,:) = 0._dl*(1._dl,0._dl)	! initialize zero power in all modes
+		call init_m2_diag()												! initialize mass matrix
+
+		! Loop over all modes on the lattice and set power
+		do k=1,nz; if (k>nnz) then; kk = nz+1-k; else; kk=k-1; endif
+		do j=1,ny; if (j>nny) then; jj = ny+1-j; else; jj=j-1; endif
+			do i=1,nnx
+				rad2 = dble((i-1)**2) + dble(jj**2) + dble(kk**2)
+				rad2 = rad2*dk**2
+				do n=1,nfld
+					cor_lat(2*n-1,2*n-1,LATIND) = fld_scl*(1._dl,0._dl)/(2._dl*sqrt(rad2 + m2_diag(n))*mpl**2)	! field-field
+					cor_lat(2*n,2*n,LATIND) = dfld_scl*(1._dl,0._dl)*sqrt(rad2 + m2_diag(n))/(2._dl*mpl**2)			! momentum-momentum
+				enddo
+			enddo
+		enddo
+		enddo
+
+		cor_lat = nvol**2*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
+	end subroutine mink_cor_lat_scale
+
+	! Subroutine to perform a linear transformation on the spectrum of Minkowski space vacuum fluctuations
+	! built for one field model
+	! to do: declare transformation matrix
+	! to do: construct transformation matrix from scl, ar, and rot
+	! to do: transform cor_lat using transformation matrix
+	! to do check row/column on tran_mat
+	subroutine mink_cor_lat_transform(scl, ar, rot)
+		real(dl) :: scl		! Overall scal pactor for P_tensor
+		real(dl) :: ar		! Transformation to the aspect ratio of P_phiphi to P_pipi
+		real(dl) :: rot		! Rotation angle of P_tensor, generates phi-pi correlation
+		integer :: i,j,k			!	lattice indicies
+		integer :: ii,jj,kk		! fourier modes
+		integer :: m,n				! field indicies 
+		real(dl) :: rad2			! comoving wavenumber (double check the units)
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld) :: tran_mat	! transformation matrix
+
+		! Construct transfromation matrix
+		tran_mat(:,:) = 0._dl*(1._dl,0._dl)
+		do n=1,nfld
+			tran_mat(2*n-1,2*n-1) = scl*cos(rot)*ar*(1._dl,0._dl)
+			tran_mat(2*n-1,2*n) = -scl*sin(rot)/ar*(1._dl,0._dl)
+			tran_mat(2*n,2*n-1) = scl*sin(rot)*ar*(1._dl,0._dl)
+			tran_mat(2*n,2*n) = scl*cos(rot)/ar*(1._dl,0._dl)
+		enddo
+
+	end subroutine mink_cor_lat_transform
+
+	! Subroutine to generate power spectrum by scaling Minkowski space spectrum with Det(P) = const
+	! n.b. fld_scl*dfld_scl 
+	subroutine mink_cor_lat_scale2(fld_scl, dfld_scl)
+		real(dl) :: fld_scl		! scaling factor for <fld**2>
+		real(dl) :: dfld_scl	! scaling factor for <dfld**2>
+		integer :: i,j,k			!	lattice indicies
+		integer :: ii,jj,kk		! fourier modes
+		integer :: m,n				! field indicies 
+		real(dl) :: rad2			! comoving wavenumber (double check the units)
+		
+		cor_lat(:,:,:,:,:) = 0._dl*(1._dl,0._dl)	! initialize zero power in all modes
+		call init_m2_diag()												! initialize mass matrix
+
+		! Loop over all modes on the lattice and set power
+		do k=1,nz; if (k>nnz) then; kk = nz+1-k; else; kk=k-1; endif
+		do j=1,ny; if (j>nny) then; jj = ny+1-j; else; jj=j-1; endif
+			do i=1,nnx
+				rad2 = dble((i-1)**2) + dble(jj**2) + dble(kk**2)
+				rad2 = rad2*dk**2
+				do n=1,nfld
+					cor_lat(2*n-1,2*n-1,LATIND) = fld_scl*(1._dl,0._dl)/(2._dl*sqrt(rad2 + m2_diag(n))*mpl**2)	! field-field
+					cor_lat(2*n,2*n,LATIND) = dfld_scl*(1._dl,0._dl)*sqrt(rad2 + m2_diag(n))/(2._dl*mpl**2)			! momentum-momentum
+					cor_lat(2*n-1,2*n,LATIND) = -(1._dl,0._dl)*sqrt(fld_scl*dfld_scl-1._dl)/(2._dl*mpl**2)				! field-momentum
+					cor_lat(2*n,2*n-1,LATIND) = cor_lat(2*n-1,2*n,LATIND)
+				enddo
+			enddo
+		enddo
+		enddo
+
+		cor_lat = nvol**2*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
+	end subroutine mink_cor_lat_scale2
+
+	! Subroutine to generate power spectrum by scaling Minkowski space spectrum with Det(P) = const
+	! n.b. don't use dfld_scl = 0
+	subroutine mink_cor_lat_scale3(dfld_scl, cross_fac)
+		real(dl) :: dfld_scl	! scaling factor for <dfld**2>
+		real(dl) :: cross_fac	! factor to determin the cross spectrum of <fld*dfld>
+		integer :: i,j,k			!	lattice indicies
+		integer :: ii,jj,kk		! fourier modes
+		integer :: m,n				! field indicies 
+		real(dl) :: rad2			! comoving wavenumber (double check the units)
+		
+		cor_lat(:,:,:,:,:) = 0._dl*(1._dl,0._dl)	! initialize zero power in all modes
+		call init_m2_diag()												! initialize mass matrix
+
+		! Loop over all modes on the lattice and set power
+		do k=1,nz; if (k>nnz) then; kk = nz+1-k; else; kk=k-1; endif
+		do j=1,ny; if (j>nny) then; jj = ny+1-j; else; jj=j-1; endif
+			do i=1,nnx
+				rad2 = dble((i-1)**2) + dble(jj**2) + dble(kk**2)
+				rad2 = rad2*dk**2
+				do n=1,nfld
+					cor_lat(2*n-1,2*n-1,LATIND) = (4._dl*cross_fac**2+1._dl)/dfld_scl*(1._dl,0._dl)/(2._dl*sqrt(rad2 + m2_diag(n))*mpl**2)	! field-field
+					cor_lat(2*n,2*n,LATIND) = dfld_scl*(1._dl,0._dl)*sqrt(rad2 + m2_diag(n))/(2._dl*mpl**2)			! momentum-momentum
+					cor_lat(2*n-1,2*n,LATIND) = -(1._dl,0._dl)*cross_fac/(2._dl*mpl**2)				! field-momentum
+					cor_lat(2*n,2*n-1,LATIND) = cor_lat(2*n-1,2*n,LATIND)
+				enddo
+			enddo
+		enddo
+		enddo
+
+		cor_lat = nvol**2*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
+	end subroutine mink_cor_lat_scale3
+
 	! Output initial power spectrum
 	! to do: rewrite this subroutine for cor_lat
 	subroutine write_cor()
