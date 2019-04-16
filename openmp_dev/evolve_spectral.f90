@@ -27,7 +27,7 @@
 !#define NUMFIELD 2
 
 ! to do: figure out field outputing, should be done using a binary file
-! to do: output file with the run parameters, may be best to output his to terminal so the Niagara job output file contains this information as it is uniquely named
+! to do: output file with the run parameters, may be best to output this to terminal so the Niagara job output file contains this information as it is uniquely named
 ! to do: make a precompiler statement for choosing how rho is remormalized
 ! to do: make a precompiler for how fields are initialized
 ! to do: 
@@ -110,10 +110,10 @@ program lattice
 ! initialize fields	
 	!call slow_roll_cor_lat(H0)			! specific routine to provide an initial power spectrum
 	call mink_cor_lat()							! provides initial power spectrum for Minkowski space
+	call hank_cor_lat_massless(H0)	! provides initial power spectrum for massless Hankel function solutions
 	!call mink_cor_lat_scale(1._dl, 0.1_dl)
 	! This loop is for testing field initialization, ordinarily only initialize fileds once
-	!do seed_in=1,2**8
-	do seed_in=3,3		
+	do seed_in=1,2**4		
 	call init_fields_cor2(cor_lat,seed_in)	! initializes fields to match a supplied power spectrum
 		!call init_fields_ind(seed_in)	! initialize fields indepentently
 		!call make_output(0.)	! output moved here for testing
@@ -1128,7 +1128,7 @@ program lattice
 	! This will replace the subroutine init_fields
 	! The 2-point correlators need to be calculated separately, eg by integrating the mode functions
 	! to do: option for correct real-space/ Fourier-space 2-point correlation
-	! to do: apply horizon filter
+	! to do: 
 	! to do: should make exception for k=0 mode to avoid factorization error
 # define KCUT_FAC_H 16._dl
 	subroutine init_fields_cor2(cor_in, seed_in)

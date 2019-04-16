@@ -187,6 +187,41 @@ contains
 		cor_lat = nvol**2*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
 	end subroutine mink_cor_lat
 
+	! Subroutine to initialize a correlation matrix for the Hankel function modes in the massless case
+	! n.b. the correlation matrix that is initialized here will have the same value as the initial
+	! spectrum, ie. all normalizations must match between the two.
+	! n.b. assumes scale factor starts at 1
+	! to do: double check units of dk and hub
+	subroutine hank_cor_lat_massless(hub)
+		real(dl) :: hub			! Hubble parameter at initialization
+		integer :: i,j,k		!	lattice indicies
+		integer :: ii,jj,kk	! fourier modes
+		integer :: m,n			! field indicies 
+		real(dl) :: rad2		! comoving wavenumber (double check the units)
+
+		cor_lat(:,:,:,:,:) = 0._dl*(1._dl,0._dl)	! initialize zero power in all modes
+
+		! Loop over all modes on the lattice and set power
+		do k=1,nz; if (k>nnz) then; kk = nz+1-k; else; kk=k-1; endif
+		do j=1,ny; if (j>nny) then; jj = ny+1-j; else; jj=j-1; endif
+			do i=1,nnx
+				rad2 = dble((i-1)**2) + dble(jj**2) + dble(kk**2)
+				rad2 = rad2*dk**2
+				if (rad2 .ne. 0) then
+					do n=1,nfld
+						cor_lat(2*n-1,2*n-1,LATIND) =	(1._dl,0._dl)*(1._dl + (hub**2/rad2))/(2._dl*sqrt(rad2)*mpl**2)	! field-field - check units
+						cor_lat(2*n,2*n,LATIND) = (1._dl,0._dl)*(1._dl - (hub**2/rad2) + (hub**2/rad2)**2)*sqrt(rad2)/(2._dl*mpl**2)	! momentum-momentum - check units
+						cor_lat(2*n-1,2*n,LATIND) = -(1._dl,0._dl)*(hub/sqrt(rad2))**3/(2._dl*mpl**2)	! field-momentum - check units
+						cor_lat(2*n,2*n-1,LATIND) = -(1._dl,0._dl)*(hub/sqrt(rad2))**3/(2._dl*mpl**2)	! momentum-field - check units
+					enddo
+				endif
+			enddo
+		enddo
+		enddo
+
+		cor_lat = nvol**2*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
+	end subroutine hank_cor_lat_massless
+
 	! Subroutine to intitialize a correlation matrix for the Minkowski space vacuum fluctuations squeezed in the pi
 	! direction or phi direction.
 	subroutine mink_cor_lat_scale(fld_scl, dfld_scl)
