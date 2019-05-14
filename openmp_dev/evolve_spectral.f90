@@ -49,9 +49,9 @@ program lattice
   implicit none
 ! Time Stepping Properties
   integer :: j, jj
-  integer, parameter :: nstep = 2**9 			! Determines total number of output steps
-  integer, parameter :: stepsize = 2**4		! Determines number of integration steps between outputing data
-	integer, parameter :: stepslice = 2**4	! Determines number of output steps between outputing a lattice slice
+  integer, parameter :: nstep = 2**8 			! Determines total number of output steps
+  integer, parameter :: stepsize = 2**5		! Determines number of integration steps between outputing data
+	integer, parameter :: stepslice = 2**2	! Determines number of output steps between outputing a lattice slice
 	integer, parameter :: zslice = nz/2 - 3	! Determines which slice of the lattice is output
   real(dl), parameter :: tstep0 = 1.0_dl/(2.0_dl**12)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
 	real(dl) :: tstep = tstep0 							! time step which is updated
@@ -110,16 +110,17 @@ program lattice
 ! initialize fields	
 	!call slow_roll_cor_lat(H0)			! specific routine to provide an initial power spectrum
 	call mink_cor_lat()							! provides initial power spectrum for Minkowski space
-	call hank_cor_lat_massless(H0)	! provides initial power spectrum for massless Hankel function solutions
+	!call hank_cor_lat_massless_test(H0)	! provides initial power spectrum for massless Hankel function solutions
 	!call mink_cor_lat_scale(1._dl, 0.1_dl)
 	! This loop is for testing field initialization, ordinarily only initialize fileds once
-	do seed_in=1,2**4		
-	call init_fields_cor2(cor_lat,seed_in)	! initializes fields to match a supplied power spectrum
+	call write_cor_lat()
+	do seed_in=2,2	
+	!call init_fields_cor2(cor_lat,seed_in)	! initializes fields to match a supplied power spectrum
+	call init_fields_cor_conv_test(cor_lat, seed_in)	! initialization for convergence test
 		!call init_fields_ind(seed_in)	! initialize fields indepentently
 		!call make_output(0.)	! output moved here for testing
 	!enddo
-	call write_cor_lat()
-!  call init_fields(1.)	! initialize fields as in Minkowski space
+  !call init_fields(1.)	! initialize fields as in Minkowski space
 	call init_sites()	! randomly sample lattice sites at which to track trajectories
 !	call init_sites_hom()
 !	call read_sites()
@@ -551,7 +552,7 @@ program lattice
 !
 ! Randomly sample a gaussian random field with the appropriate spectrum
 !
-#define KCUT_FAC 1.
+#define KCUT_FAC 1.0
     subroutine sample(gamma, m2eff, spec)
 !      real(C_DOUBLE), pointer :: f(:,:,:)
       real(dl) :: gamma
@@ -652,6 +653,7 @@ program lattice
 			open(unit=91,file="init_spectrum.out")
 			open(unit=90,file="lat_slice.out")
 			open(unit=89,file="lat.out")
+			open(unit=88,file="run_param.out")
 #ifdef THREEDIM
       call init_spectrum_3d(nx,ny,nz)
 #endif
@@ -662,6 +664,20 @@ program lattice
       call init_spectrum_1d(nx)
 #endif
     end subroutine init_output
+		
+		! Subroutine to output the run parameters in a human readable way
+		subroutine output_run_param()
+			write(88), "nx, ny, nz: ",nx,ny,nz
+			write(88), "len: ",len
+			write(88), "phi0, dphi0, H0: ",phi0,dphi0,H0
+			write(88), "infl_option, potential_option: ",infl_option, potential_option
+			write(88), "mpl: ",mpl
+			if (infl_option == 1) then
+				write(88), "m2"
+			elseif (infl_option == 2) then
+			endif
+			close(unit=88)
+		end subroutine output_run_param
 
     subroutine make_output(time, step)
       real(dl) :: time
@@ -679,7 +695,7 @@ program lattice
 				call write_slice(time,zslice)
 			endif
 			if (step==nstep-1) then
-				call write_lat(time)
+			!	call write_lat(time)
 			endif
 ! if the WINT is not defined call lat_dump to output the lattice to a binary file 
 !#ifndef WINT
@@ -1130,7 +1146,7 @@ program lattice
 	! to do: option for correct real-space/ Fourier-space 2-point correlation
 	! to do: 
 	! to do: should make exception for k=0 mode to avoid factorization error
-# define KCUT_FAC_H 16._dl
+#define KCUT_FAC_H 16._dl
 	subroutine init_fields_cor2(cor_in, seed_in)
 		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,nnx,ny,nz) :: cor_in			! Input power/cross spectrum for each k on the lattice
 		integer :: seed_in
@@ -1142,7 +1158,7 @@ program lattice
 
     integer :: i, j, k, n, m, l																! lattice location indicies/ matrix indicies, check integer
 		integer :: ii,jj,kk																				! mode numbers used for filtering
-		real(dl), parameter :: kcut = KCUT_FAC*(min(nnx,nny,nnz)-1)	!	frequency filtering at Nyquist
+		real(dl), parameter :: kcut = KCUT_FAC*(min(nnx,nny,nnz)-1)!sqrt(2.*KCUT_FAC*(min(nnx,nny,nnz)-1))	!	frequency filtering at Nyquist
 		real(dl), parameter :: kcut_h = KCUT_FAC_H*H0									! frequency filtering at horizon
 
 #ifdef THREEDIM
@@ -1152,6 +1168,8 @@ program lattice
 		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld) :: cor_fac												! factored power at a particular k mode		
 		complex(C_DOUBLE_COMPLEX), dimension(2*nfld) :: grv																		! vector of Gaussian random variables
 		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,nnx,ny,nz) :: Fk_cor											! vector to hold DFT of fld1, fldp1, fld2, fldp2, ...
+
+		!print*, "kcut: ", kcut
 		
 		! Initialize random number generator
 		call random_seed(SIZE=nseed)
@@ -1180,9 +1198,10 @@ program lattice
 			if (i==1 .and. j==1 .and. k==1) then
 				grv(:) = (0._dl,0._dl)
 			elseif (i==1 .or. i==nnx) then
-				grv(:) = (1._dl,0._dl)*sign(sqrt(-2._dl*log(a)),p-0.5_dl)
+				grv(:) = (1._dl,0._dl)*sign(sqrt(-2._dl*log(a)),p-0.5_dl)!/sqrt(2._dl*dble(nfld))	! Normalize grv accounting for number of fields. Is this one right?
 			else
-				grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p)			! Removed factor of sqrt(2) from Box Mueller transform to normalize for complex grv
+				!grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p)			! Removed factor of sqrt(2) from Box Mueller transform to normalize for complex grv. That was wrong needs normalization based on nfld
+				grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p)!/sqrt(2._dl*dble(nfld))	! Normalize grv accounting for number of fields
 			endif
 			!print*, "grv norm= ", sqrt((grv*conjg(grv)))
 			do m = 1,2*nfld; do n = 1,2*nfld	! can do this with a where statement
@@ -1192,7 +1211,10 @@ program lattice
 			enddo; enddo
 			call ztrmv('L','N','N', 2*nfld, cor_fac, 2*nfld, grv,  1)	! multiply random vector by transposed lower triangular factor of matrix
 			!Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj*2+kk**2)/(kcut**2))	! filtering at Nyquist
-			Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj*2+kk**2)/(kcut**2))*exp(-0.5*dble(ii**2+jj*2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon
+			Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj**2+kk**2)/(kcut**2))*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon, modified Nyq filtering
+			!if (dble(ii**2+jj**2+kk**2) - kcut**2>0) then
+			!	Fk_cor(:,LATIND) = grv(:)*0.0_dl
+			!endif
 		enddo; enddo; enddo
 		
 		! Peform FFT to calculate fluctuations in real space
@@ -1202,14 +1224,115 @@ program lattice
 			Fk(:,:,:) = Fk_cor(2*m-1,:,:,:)
 			call fftw_execute_dft_c2r(planb, Fk, laplace)!!!!! fft to real space
 			fld(m,IRANGE) = fld0(m) + laplace(IRANGE)
+#ifdef GHOST
+			ghst(m,IRANGE) = laplace(IRANGE)
+#endif
 			Fk(:,:,:) = Fk_cor(2*m,:,:,:)
 			call fftw_execute_dft_c2r(planb, Fk, laplace)
 			fldp(m,IRANGE) = dfld0(m) + laplace(IRANGE)
+#ifdef GHOST
+			ghstp(m,IRANGE) = laplace(IRANGE)
+#endif
 		enddo
 
 		yscl = 1._dl
     call calc_metric()
 	end subroutine init_fields_cor2
+
+	! Alternative field initialization routine to use for convergence tests. Initializes fields using the Fourier modes of a lattice with double the grid spacing. 
+	subroutine init_fields_cor_conv_test(cor_in, seed_in)
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,nnx,ny,nz) :: cor_in			! Input power/cross spectrum for each k on the lattice
+		integer :: seed_in
+
+    complex, parameter :: w = (0._dl, twopi)									! i*2*pi, used for random phase
+		real(dl) :: a(2*nfld), p(2*nfld)													! amplitude, phase
+    integer, allocatable :: seed(:)														! rng variable
+    integer :: nseed																					! rng variable
+
+    integer :: i, j, k, n, m, l																! lattice location indicies/ matrix indicies, check integer
+		integer :: ii,jj,kk																				! mode numbers used for filtering
+		real(dl), parameter :: kcut = KCUT_FAC*(min(nx/4,ny/4,nz/4))!sqrt(2.*KCUT_FAC*(min(nnx,nny,nnz)-1))	!	frequency filtering at Nyquist
+		real(dl), parameter :: kcut_h = KCUT_FAC_H*H0									! frequency filtering at horizon
+
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld) :: cor_fac												! factored power at a particular k mode		
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld) :: grv																		! vector of Gaussian random variables
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,nnx,ny,nz) :: Fk_cor											! vector to hold DFT of fld1, fldp1, fld2, fldp2, ...
+		
+		integer, dimension(nx/2) :: k_conv
+
+		! Ordering of Fourier modes for lattice with double grid spacing
+		k_conv = (/ (k, k=1,nx/2) /)
+		where (k_conv > nx/4+1)
+			k_conv = k_conv+nx/2
+		elsewhere
+			k_conv = k_conv
+		end where 
+
+		print*, "kcut: ", kcut
+		
+		! Initialize random number generator
+		call random_seed(SIZE=nseed)
+		print*, 'nseed = ', nseed
+    allocate(seed(nseed))
+    !seed = 27*(/ (i-1, i=1,nseed) /)
+		seed = seed_in*(/ (i-1, i=1,nseed) /)
+    call random_seed(PUT=seed)
+    deallocate(seed)
+
+		! Put all modes to zero
+		Fk_cor(:,:,:,:) = 0._dl
+
+		! Cholesky factorization of power
+		do k=1,nz/2; do j=1,ny/2; do i=1,nx/4+1
+			if (k>nz/4+1) then; kk = k_conv(k)-nz-1; else; kk=k-1; endif
+			if (j>ny/4+1) then; jj = k_conv(j)-ny-1; else; jj=j-1; endif
+			ii = i-1
+			do m = 1,2*nfld; do n = 1,2*nfld
+				cor_fac(m,n) = cor_in(m,n,i,k_conv(j),k_conv(k))
+			enddo; enddo
+			call zpotrf('L',2*nfld,cor_fac,2*nfld,l)	! Factorize matrix
+			if (l /= 0) then
+				print*, "Factorization warning: l = ", l
+			endif
+			! Initialize GRV vector
+			call random_number(a); call random_number(p)	! a and p are dimension 2*nfld
+			if (i==1 .and. j==1 .and. k==1) then
+				grv(:) = (0._dl,0._dl)
+			elseif (i==1 .or. i==nx/4+1) then
+				grv(:) = (1._dl,0._dl)*sign(sqrt(-2._dl*log(a)),p-0.5_dl)	! Box Mueller transform
+			else
+				grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p)
+			endif
+			!print*, "grv norm= ", sqrt((grv*conjg(grv)))
+			do m = 1,2*nfld; do n = 1,2*nfld	! can do this with a where statement
+				if (n<m) then
+					cor_fac(n,m) = (0._dl,0._dl)
+				endif
+			enddo; enddo
+			call ztrmv('L','N','N', 2*nfld, cor_fac, 2*nfld, grv,  1)	! multiply random vector by transposed lower triangular factor of matrix
+			Fk_cor(:,i,k_conv(j),k_conv(k)) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj**2+kk**2)/(kcut**2))*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon, modified Nyq filtering
+		enddo; enddo; enddo
+		
+		! Peform FFT to calculate fluctuations in real space
+		! Add fluctuations to homogeneous fields
+		do m=1, nfld
+			Fk(:,:,:) = Fk_cor(2*m-1,:,:,:)
+			call fftw_execute_dft_c2r(planb, Fk, laplace)!!!!! fft to real space
+			fld(m,IRANGE) = fld0(m) + laplace(IRANGE)
+#ifdef GHOST
+			ghst(m,IRANGE) = laplace(IRANGE)
+#endif
+			Fk(:,:,:) = Fk_cor(2*m,:,:,:)
+			call fftw_execute_dft_c2r(planb, Fk, laplace)
+			fldp(m,IRANGE) = dfld0(m) + laplace(IRANGE)
+#ifdef GHOST
+			ghstp(m,IRANGE) = laplace(IRANGE)
+#endif
+		enddo
+
+		yscl = 1._dl
+    call calc_metric()
+	end subroutine init_fields_cor_conv_test
 
 	! subroutine to initialize fields independently for testing purposes
 	! to do: the reality condition inforces that some of the entries to Fk_cor must be real, do this.
