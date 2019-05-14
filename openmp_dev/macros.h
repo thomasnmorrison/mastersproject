@@ -4,6 +4,7 @@
 !#define RENORM 0
 !#define ONEFLD 1
 #define TWOFLD 1
+!#define GHOST 1
 
 #define WINT 1
 
