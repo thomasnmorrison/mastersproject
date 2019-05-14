@@ -5,6 +5,7 @@
 ! to do: make better use of arrays so that set_fld_temp can be generalized to nfld
 
 ! to do: test zeta_lat calculation
+! to do: output equation of state
 
 module zeta_mod
 
@@ -21,6 +22,7 @@ module zeta_mod
 	real(dl), dimension(2) :: dzeta = (/0.0_dl,0.0_dl/)
 	real(dl), dimension(IRANGE) :: zeta_lat
 	real(dl), dimension(2,IRANGE) :: dzeta_lat !dzeta/dtau
+	!real(dl), dimension(2,IRANGE) :: dzeta_lat_temp	! 1st component is numerator of dzeta, 2nd component is denominator of dzeta
 	
 	! additional pointers needed for calculating dzeta
 	real(C_DOUBLE), pointer :: ggrad1(:,:,:)
@@ -84,6 +86,20 @@ contains
 			!zfp2 = fldp(1,IRANGE)!THIS IS WRONG ONLY FOR TESTING
 		endif
 	end subroutine set_fld_temp
+
+	! subroutint to set temp fields in get_dzeta_test
+#ifdef GHOST
+	subroutine set_fld_temp_test(ind)
+		integer :: ind
+		
+		if (ind <= nfld) then
+			zf1 = fld(ind,IRANGE)
+			zfp1 = fldp(ind,IRANGE)
+		elseif (ind > nfld) then
+			zf1 = ghst(ind-nfld,IRANGE)
+			zfp1 = ghstp(ind-nfld,IRANGE)
+	end subroutine set_fld_temp_test
+#endif
 
 	!rename ggrad to gg in order to not overload the namespace
 !	subroutine get_dzeta(nsize, dk, dzeta, yscl, ysclp, f1, f2, fp1, fp2, gg1, gg2, lap1,lap2, gg3, gg4, Fk1, planf, planb)
@@ -208,6 +224,71 @@ contains
 		!print*, zf1(6,6,6)
 	end subroutine get_dzeta
 
+	subroutine get_dzeta_test(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
+		integer, dimension(1:3), intent(in) :: nsize
+		real*8 :: dk	
+    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
+		type(C_PTR) :: planf, planb
+
+		real(dl) :: hub
+		integer :: n1, n2, n3
+		integer :: i,j
+
+		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
+		hub = -ysclp/(6.0_dl*yscl**2)
+
+		dzeta(1) = dzeta(2)	!store old value
+		dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
+		sample_dzeta(1,:) = sample_dzeta(2,:)
+		!sample_dzeta_f(1,:,:) = sample_dzeta_f(2,:,:)
+
+!#ifdef GHOST
+	!do n=1,2*nfld
+!#elif
+	!do n=1,nfld
+!#endif
+	!enddo
+		call set_fld_temp()
+		zlap1 = zfp1
+		zlap2 = zf1
+		call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+		!if (nfld==2) then
+			zlap1 = zfp2
+			zlap2 = zf2
+			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad2,Fk1,Fk2,Fk3, planf, planb)
+		!endif
+		zlap1 = zf1
+		call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)
+		!if (nfld==2) then
+			zlap2 = zf2
+			call laplacian_spectral(n1,n2,n3,zlap2,Fk1,dk,planf,planb)
+		!endif
+		zf3 = zf1
+		call graddotgrad(nsize,dk,zf1,zf3,ggrad3,Fk1,Fk2,Fk3, planf, planb)
+		!if (nfld==2) then
+			zf4 = zf2
+			call graddotgrad(nsize,dk,zf2,zf4,ggrad4,Fk1,Fk2,Fk3, planf, planb)
+		!endif		
+
+		zf1 = (yscl**2*(ggrad1 + ggrad2 + zfp1*zlap1 + zfp2*zlap2)) / (3.0_dl*zfp1**2 + 3.0_dl*zfp2**2 + yscl**4*(ggrad3 + ggrad4))!!!Without extra term and squaring yscl to account for conformal time
+
+		do i=1,n_sample
+			sample_dzeta(2,i) = zf1(sample_site(i,1),sample_site(i,2),sample_site(i,3))
+		enddo
+		dzeta(2) = sum(zf1(IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		dzeta_lat(2,IRANGE) = zf1(IRANGE)
+
+		!do i=1,nfld
+		!	if (i==1) then
+		!		zf2 = (yscl**2*(ggrad1 + zfp1*zlap1)) / (3.0_dl*zfp1**2 + 3.0_dl*zfp2**2 + yscl**4*(ggrad3 + ggrad4))
+		!	elseif (i==2) then
+		!		zf2 = (yscl**2*(ggrad2 + zfp2*zlap2)) / (3.0_dl*zfp1**2 + 3.0_dl*zfp2**2 + yscl**4*(ggrad3 + ggrad4))
+		!	endif
+		!	do j=1,n_sample
+				!sample_dzeta_f(2,i,j) = zf2(sample_site(j,1),sample_site(j,2),sample_site(j,3))
+		!	enddo	
+		!enddo
+	end subroutine get_dzeta_test
 
 
 ! calculates grad(f1).grad(f2) and outputs in gg (f1 and f2 are also overwritten)
