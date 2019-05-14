@@ -166,7 +166,8 @@ contains
 		integer :: ii,jj,kk	! fourier modes
 		integer :: m,n			! field indicies 
 		real(dl) :: rad2		! comoving wavenumber (double check the units)
-
+		real(dl), parameter	:: norm	= nvol/(mpl**2*dx**3)! normalization constant
+		
 		cor_lat(:,:,:,:,:) = 0._dl*(1._dl,0._dl)	! initialize zero power in all modes
 		call init_m2_diag()												! initialize mass matrix
 
@@ -177,14 +178,14 @@ contains
 				rad2 = dble((i-1)**2) + dble(jj**2) + dble(kk**2)
 				rad2 = rad2*dk**2
 				do n=1,nfld
-					cor_lat(2*n-1,2*n-1,LATIND) = (1._dl,0._dl)/(2._dl*sqrt(rad2 + m2_diag(n))*mpl**2)	! field-field
-					cor_lat(2*n,2*n,LATIND) = (1._dl,0._dl)*sqrt(rad2 + m2_diag(n))/(2._dl*mpl**2)			! momentum-momentum
+					cor_lat(2*n-1,2*n-1,LATIND) = (1._dl,0._dl)/(2._dl*sqrt(rad2 + m2_diag(n)))	! field-field
+					cor_lat(2*n,2*n,LATIND) = (1._dl,0._dl)*sqrt(rad2 + m2_diag(n))/(2._dl)			! momentum-momentum
 				enddo
 			enddo
 		enddo
 		enddo
 
-		cor_lat = nvol**2*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
+		!cor_lat = norm*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
 	end subroutine mink_cor_lat
 
 	! Subroutine to initialize a correlation matrix for the Hankel function modes in the massless case
@@ -221,6 +222,38 @@ contains
 
 		cor_lat = nvol**2*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
 	end subroutine hank_cor_lat_massless
+
+	! Trying to fix the ICs
+	subroutine hank_cor_lat_massless_test(hub)
+		real(dl) :: hub			! Hubble parameter at initialization
+		integer :: i,j,k		!	lattice indicies
+		integer :: ii,jj,kk	! fourier modes
+		integer :: m,n			! field indicies 
+		real(dl) :: rad2		! comoving wavenumber (double check the units)
+		real(dl), parameter	:: norm	= nvol/(mpl**2*dx**3)! normalization constant
+
+		cor_lat(:,:,:,:,:) = 0._dl*(1._dl,0._dl)	! initialize zero power in all modes
+
+		! Loop over all modes on the lattice and set power
+		do k=1,nz; if (k>nnz) then; kk = nz+1-k; else; kk=k-1; endif
+		do j=1,ny; if (j>nny) then; jj = ny+1-j; else; jj=j-1; endif
+			do i=1,nnx
+				rad2 = dble((i-1)**2) + dble(jj**2) + dble(kk**2)
+				rad2 = rad2*dk**2
+				if (rad2 .ne. 0) then
+					do n=1,nfld
+						cor_lat(2*n-1,2*n-1,LATIND) =	(1._dl,0._dl)*(1._dl + (hub**2/rad2))/(2._dl*sqrt(rad2))	! field-field
+						cor_lat(2*n,2*n,LATIND) = (1._dl,0._dl)*(1._dl - (hub**2/rad2) + (hub**2/rad2)**2)*sqrt(rad2)/(2._dl)	! momentum-momentum
+						cor_lat(2*n-1,2*n,LATIND) = -(1._dl,0._dl)*(hub/sqrt(rad2))**3/(2._dl)	! field-momentum
+						cor_lat(2*n,2*n-1,LATIND) = -(1._dl,0._dl)*(hub/sqrt(rad2))**3/(2._dl)	! momentum-field
+					enddo
+				endif
+			enddo
+		enddo
+		enddo
+
+		cor_lat = norm*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
+	end subroutine hank_cor_lat_massless_test
 
 	! Subroutine to intitialize a correlation matrix for the Minkowski space vacuum fluctuations squeezed in the pi
 	! direction or phi direction.
@@ -362,6 +395,7 @@ contains
 	! Output initial power spectrum
 	! to do: calculate spectrum as in analysis_spec.f90
 	! to do: the spectrum calculation needs modification due to the squaring
+	! to do: ordering of output nolonger matches spectrum.out
 	subroutine write_cor_lat()
 		real(dl), dimension(2*nfld,2*nfld,1:ns) :: S
 
@@ -397,12 +431,18 @@ contains
 
 		! make output to match the formatting of spectrum.out
 		if (nfld==2) then
-		do i=1,ns
-			write(91,'(30(ES22.15,2x))') (i-1)*dk, S(1,1,i), S(2,2,i), S(2,1,i), 0._dl, S(3,3,i), S(4,4,i), S(4,3,i), 0._dl, 0._dl, 0._dl, 0._dl, 0._dl, 0._dl, S(3,1,i), S(4,1,i), S(3,2,i), S(4,2,i)
-		enddo
+			do i=1,ns
+				write(91,'(30(ES22.15,2x))') (i-1)*dk, 0._dl, 0._dl, 0._dl, 0._dl, S(1,1,i), S(2,2,i), S(2,1,i), 0._dl, S(3,3,i), S(4,4,i), S(4,3,i)	! doesn't include phi - chi cross terms
+				!write(91,'(30(ES22.15,2x))') (i-1)*dk, S(1,1,i), S(2,2,i), S(2,1,i), 0._dl, S(3,3,i), S(4,4,i), S(4,3,i), 0._dl, 0._dl, 0._dl, 0._dl, 0._dl, 0._dl, S(3,1,i), S(4,1,i), S(3,2,i), S(4,2,i)
+			enddo
+		elseif (nfld==1) then
+			do i=1,ns
+				write(91,'(30(ES22.15,2x))') (i-1)*dk, 0._dl, 0._dl, 0._dl, 0._dl, S(1,1,i), S(2,2,i), S(2,1,i), 0._dl
+				!write(91,'(30(ES22.15,2x))') (i-1)*dk, S(1,1,i), S(2,2,i), S(2,1,i)
+			enddo
 		endif
 
-		close(91)
+		!close(91)
 	end subroutine write_cor_lat
 
 end module correlator_mod
