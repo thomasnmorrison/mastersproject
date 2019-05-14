@@ -24,10 +24,10 @@ module Hamiltonian
 
 	!real(dl), parameter :: infl=4.1_dl !inflation parameter y
 
-  real(dl), parameter :: phi0 = 3.2_dl+0.7_dl! + 0.25_dl!sqrt(0.8164/sqrt(g2))!7.511816626277513_dl!2.3393837654714997732962993666073! infl*2.309401076758!7.502897008008175! !		
-  real(dl), parameter :: dphi0 = -dsqrt(2.0_dl/3.0_dl)!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
+  real(dl), parameter :: phi0 = 3.2_dl+0.7_dl!3.402544_dl!3.4_dl! + 0.25_dl!sqrt(0.8164/sqrt(g2))!7.511816626277513_dl!2.3393837654714997732962993666073! infl*2.309401076758!7.502897008008175! !		
+  real(dl), parameter :: dphi0 = -dsqrt(2.0_dl/3.0_dl)!-0.796975_dl!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
   real(dl), parameter :: chi0 = 0.0_dl !-3.38704185098e-7!3.9e-7 !
-  real(dl), parameter :: H0 = 1.592 !1.388_dl !6.6599_dl!phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !	
+  real(dl), parameter :: H0 = 1.592_dl !1.460_dl!1.426786_dl! !6.6599_dl!phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !	
 #ifdef ONEFLD			
   real(dl), parameter, dimension(nfld) :: fld0 = (/phi0/)!(/0._dl,0._dl/)!(/phi0,chi0/)!
 	real(dl), parameter, dimension(nfld) :: dfld0 = (/dphi0/)!(/0._dl,0._dl/)!(/dphi0,0.0_dl/)!
@@ -41,6 +41,10 @@ module Hamiltonian
 ! Evolution variables
   real(dl), dimension(nfld, SIRANGE) :: fld
   real(dl), dimension(nfld, IRANGE) :: fldp
+#ifdef GHOST
+	real(dl), dimension(nfld, SIRANGE) :: ghst
+	real(dl), dimension(nfld, IRANGE) :: ghstp
+#endif
   real(dl) :: yscl, ysclp
 
   type(C_PTR) :: planf, planb
@@ -429,6 +433,13 @@ contains
          fld(:,:,0,:) = fld(:,:,ny,:); fld(:,:,ny+1,:) = fld(:,:,1,:)
          fld(:,:,:,0) = fld(:,:,:,nz); fld(:,:,:,nz+1) = fld(:,:,:,1)
       enddo
+#ifdef GHOST
+			do l=1,nfld
+         ghst(:,0,:,:) = ghst(:,nx,:,:); ghst(:,nx+1,:,:) = ghst(:,1,:,:)
+         ghst(:,:,0,:) = ghst(:,:,ny,:); ghst(:,:,ny+1,:) = ghst(:,:,1,:)
+         ghst(:,:,:,0) = ghst(:,:,:,nz); ghst(:,:,:,nz+1) = ghst(:,:,:,1)
+      enddo
+#endif
 #endif
 #ifdef TWODIM
       do l=1,nfld
