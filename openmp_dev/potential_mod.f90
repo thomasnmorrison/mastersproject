@@ -24,12 +24,13 @@ module potential_mod
 	integer, parameter :: nfld=2
 #endif
 	integer, parameter :: potential_option = 4 ! parameter to choose the form of Delta_V
-	! no phi-chi interaction: potential_option = 0
+	! no phi-chi interaction, chi massless: potential_option = 0
 	! trapped plus transverse instability: potential_option = 1
 	! transverse instability blip: potential_option = 2
 	! absolute value transverse blip: potential_option = 3
 	! trapped-asymptotically constant: potential_option = 4
 	! constant chi mass: potential_option = 5
+	! trapped-asymptotically constant (polynomial): potential_option = 6
 	integer, parameter :: infl_option = 2 ! parameter to choose form of inflationary potential
 	! phi^4: infl_option = 1
 	! m^2 phi^2: infl_option = 2
@@ -37,7 +38,7 @@ module potential_mod
 	! general parameters
 	real(dl), parameter :: mpl=1.e3												! machine units conversion factor, moved from hampiltonian_conformal.f90
 	real(dl), parameter :: m2 = 1.0_dl										! inflaton mass
-	real(dl), parameter :: lambda_chi = 0.0_dl						! chi self interaction
+	real(dl), parameter :: lambda_chi = 10.0_dl!10.0_dl						! chi self interaction
 	real(dl), parameter :: phi_p = 3.2!*dsqrt(4.0*twopi)	! interaction potential characteristic phi value
 
 	! potential_option = 1 parameters
@@ -52,13 +53,17 @@ module potential_mod
 
 	! potential_option = 4 parameters
 	real(dl), parameter :: m2_inf = 50._dl*m2										! asymptotic squared mass of chi
-	real(dl), parameter :: m2_p =	-10._dl*m2										! minimum squared mass of chi (at phi=phi_p) 
+	real(dl), parameter :: m2_p =	-100._dl*m2										! minimum squared mass of chi (at phi=phi_p) 
 	! Derived parameters
 	real(dl), parameter :: c_3 = 2.*sqrt(3.*g2/(m2_inf-m2_p))
 	! Also set g2 under "potential_option = 1 parameters"
 
 	! potential_option = 5 parameters
 	! set m2_inf under "potential_option = 4 parameters"
+
+	! potential_option = 6 parameters
+	real(dl), parameter :: c_4 = sqrt(2._dl*(m2_inf-m2_p)/g2)		! width of delta V
+	! Also set g2, m2_inf, m2_p, and phi_p
 
 contains
 
@@ -74,6 +79,27 @@ contains
 		endif
   end function background_V
 
+	! function to calculate potential of the ghost fields
+	elemental function ghost_V(f1,f2)
+		real(dl) :: ghost_V
+		real(dl), intent(in) :: f1,f2
+
+		ghost_V = 0.5_dl*m2*f1**2 + 0.5_dl*m2_inf*f2**2
+	end function ghost_V
+
+	! function to calculate derivatives of ghost fields potential
+	elemental function ghost_dV(f1,f2,ind)
+		real(dl) :: ghost_dV
+		real(dl), intent(in) :: f1,f2
+		integer, intent(in) :: ind
+
+		if (ind==1) then
+			ghost_dV = m2*f1
+		elseif (ind==2) then
+			ghost_dV = m2_inf*f2
+		endif
+	end function ghost_dV
+
 	! Function to calculate the background potential for 1 field models
 	elemental function background_V_1fld(f1)
 		real(dl) :: background_V_1fld
@@ -82,7 +108,7 @@ contains
 		if (infl_option==1) then
 			background_V_1fld = 0.25_dl*f1**4
 		elseif (infl_option==2) then
-			background_V_1fld = 0.5_dl*m2*f1**2
+			background_V_1fld = 0.5_dl*m2*f1**2! + 0.5_dl*11.56_dl
 		endif
 	end function background_V_1fld
 
@@ -137,6 +163,8 @@ contains
 			Delta_V = 0.5_dl * (m2_inf - 6.*(m2_inf-m2_p) / (5.+dcosh(c_3*(f1-phi_p))) )*f2**2
 		elseif (potential_option==5) then
 			Delta_V = 0.5 * m2_inf * f2**2
+		elseif (potential_option==6) then
+			Delta_V = 0.5_dl * (m2_inf + (-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4)) * f2**2
 		endif
   end function Delta_V
 
@@ -188,7 +216,13 @@ contains
 			endif
 			if (ind==2) then
 				Delta_dV = m2_inf*f2
-			endif			
+			endif
+		elseif (potential_option==6) then
+			if (ind==1) then
+				Delta_dV = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
+			elseif (ind==2) then
+				Delta_dV = (m2_inf + (-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4)) * f2
+			endif
 		endif
   end function Delta_dV
 
