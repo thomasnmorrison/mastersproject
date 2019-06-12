@@ -42,7 +42,8 @@ program lattice
   use omp_lib
 #endif
 	use zeta_mod
-	use correlator_mod
+	!use correlator_mod
+	use correlator_int_mod
 	use sample_sites_mod
 !	use renorm_mod
 
@@ -109,14 +110,16 @@ program lattice
 
 ! initialize fields	
 	!call slow_roll_cor_lat(H0)			! specific routine to provide an initial power spectrum
-	call mink_cor_lat()							! provides initial power spectrum for Minkowski space
+	!call mink_cor_lat()							! provides initial power spectrum for Minkowski space
 	!call hank_cor_lat_massless_test(H0)	! provides initial power spectrum for massless Hankel function solutions
 	!call mink_cor_lat_scale(1._dl, 0.1_dl)
+	call init_cor_rad_cosmic(5._dl, H0)
 	! This loop is for testing field initialization, ordinarily only initialize fileds once
-	call write_cor_lat()
+	!call write_cor_lat()
 	do seed_in=2,2	
+	call init_fields_cor_rad(cor_rad, seed_in)	! initialize fields from oversampled, isotropic power spectrum
 	!call init_fields_cor2(cor_lat,seed_in)	! initializes fields to match a supplied power spectrum
-	call init_fields_cor_conv_test(cor_lat, seed_in)	! initialization for convergence test
+	!call init_fields_cor_conv_test(cor_lat, seed_in)	! initialization for convergence test
 		!call init_fields_ind(seed_in)	! initialize fields indepentently
 		!call make_output(0.)	! output moved here for testing
 	!enddo
@@ -552,7 +555,7 @@ program lattice
 !
 ! Randomly sample a gaussian random field with the appropriate spectrum
 !
-#define KCUT_FAC 1.0
+#define KCUT_FAC 0.66_dl
     subroutine sample(gamma, m2eff, spec)
 !      real(C_DOUBLE), pointer :: f(:,:,:)
       real(dl) :: gamma
@@ -584,9 +587,9 @@ program lattice
       
     ! calculate (oversampled) radial profile of convolution kernel
       do k = 1,nos; kk = (k-0.5)*dkos
-         !ker(k) = kk*(kk**2 + m2eff)**gamma * exp(-(kk/kcut)**2)	! filter fluctuations for Niquist
+         ker(k) = kk*(kk**2 + m2eff)**gamma * exp(-(kk/kcut)**2)	! filter fluctuations for Niquist
 				 !ker(k) = kk*(kk**2 + m2eff)**gamma * exp(-(kk/KCUT_FAC*(H0*exp(H0*(phi_p-phi0)/dphi0)))**2)	 !filter fluctuations for horizon scale
-					ker(k) = kk*(kk**2 + m2eff)**gamma * exp(-0.5*(kk/(KCUT_FAC*H0*exp(H0*(phi_p-phi0)/dphi0)*exp(H0/sqrt(sqrt(1.e5)*abs(dphi0)))))**2)	 !filter fluctuations at the horizon sclae at the end of non-adiatic event !!!FIX THIS WHEN YOU GET THE CHANCE FILTERING SHOULD NOT DEPEND ON g2, I'VE HARD CODED A VALUE AS A TEMPORARY FIX.
+				 !ker(k) = kk*(kk**2 + m2eff)**gamma * exp(-0.5*(kk/(KCUT_FAC*H0*exp(H0*(phi_p-phi0)/dphi0)*exp(H0/sqrt(sqrt(1.e5)*abs(dphi0)))))**2)	 !filter fluctuations at the horizon sclae at the end of non-adiatic event !!!FIX THIS WHEN YOU GET THE CHANCE FILTERING SHOULD NOT DEPEND ON g2, I'VE HARD CODED A VALUE AS A TEMPORARY FIX.
       end do
       
 !      Assign the kernel here
@@ -694,8 +697,8 @@ program lattice
 			if (0 == mod(step, stepslice)) then
 				call write_slice(time,zslice)
 			endif
-			if (step==nstep-1) then
-			!	call write_lat(time)
+			if (step==0) then
+				!call write_lat(time)
 			endif
 ! if the WINT is not defined call lat_dump to output the lattice to a binary file 
 !#ifndef WINT
@@ -958,7 +961,7 @@ program lattice
     real(dl) :: kk																						! radial distance (real/momentum space)
 #ifdef THREEDIM
     !real(dl), parameter :: norm = 0.5/(nvol*(twopi*dk**3)**0.5*mpl)*(dkos/dxos) ! double check that this is the correct value
-		real(dl), parameter :: norm = 2._dl*twopi*dkos / (dxos**2*nos*nvol)
+		real(dl), parameter :: norm = 2._dl!*twopi*dkos / (dxos**2*nos*nvol) ! this is wrong
 #endif
 		type(C_PTR) :: plan_sin																		! FFT plan
 		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,IRANGE) :: cor_interp							! Power spec interpolated to each Fourier mode on the lattice
@@ -1169,7 +1172,7 @@ program lattice
 		complex(C_DOUBLE_COMPLEX), dimension(2*nfld) :: grv																		! vector of Gaussian random variables
 		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,nnx,ny,nz) :: Fk_cor											! vector to hold DFT of fld1, fldp1, fld2, fldp2, ...
 
-		!print*, "kcut: ", kcut
+		print*, "kcut: ", kcut
 		
 		! Initialize random number generator
 		call random_seed(SIZE=nseed)
@@ -1211,10 +1214,12 @@ program lattice
 			enddo; enddo
 			call ztrmv('L','N','N', 2*nfld, cor_fac, 2*nfld, grv,  1)	! multiply random vector by transposed lower triangular factor of matrix
 			!Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj*2+kk**2)/(kcut**2))	! filtering at Nyquist
-			Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj**2+kk**2)/(kcut**2))*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon, modified Nyq filtering
-			!if (dble(ii**2+jj**2+kk**2) - kcut**2>0) then
-			!	Fk_cor(:,LATIND) = grv(:)*0.0_dl
-			!endif
+			Fk_cor(:,LATIND) = grv(:)/nvol!*exp(-0.5*dble(ii**2+jj**2+kk**2)/(kcut**2))*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon, modified Nyq filtering
+			Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon, modified Nyq filtering
+			! Apply tophat filter to remove Nyquist frequency
+			if (dble(ii**2+jj**2+kk**2) - kcut**2>0) then
+				Fk_cor(:,LATIND) = grv(:)*0.0_dl
+			endif
 		enddo; enddo; enddo
 		
 		! Peform FFT to calculate fluctuations in real space
@@ -1239,7 +1244,96 @@ program lattice
     call calc_metric()
 	end subroutine init_fields_cor2
 
-	! Alternative field initialization routine to use for convergence tests. Initializes fields using the Fourier modes of a lattice with double the grid spacing. 
+	! subroutine to initialize fields given a power spectrum
+	! n.b. cor_in is provided as
+	subroutine init_fields_cor_rad(cor_in, seed_in)
+		real(dl), dimension(2*nfld,2*nfld,nos) :: cor_in						! power on some oversampled radial profile
+		integer :: seed_in
+		
+		complex, parameter :: w = (0._dl, twopi)									! i*2*pi, used for random phase
+		real(dl) :: a(2*nfld), p(2*nfld)													! amplitude, phase
+    integer, allocatable :: seed(:)														! rng variable
+    integer :: nseed																					! rng variable
+
+		integer :: i, j, k, n, m, l																! lattice location indicies/ matrix indicies, check integer
+		integer :: ii,jj,kk																				! mode numbers used for filtering
+		real(dl) :: rad																						! radius squared of wavenumber
+		real(dl), parameter :: kcut = KCUT_FAC*(min(nnx,nny,nnz)-1)!sqrt(2.*KCUT_FAC*(min(nnx,nny,nnz)-1))	!	frequency filtering at Nyquist
+		real(dl), parameter :: kcut_h = KCUT_FAC_H*H0									! frequency filtering at horizon
+
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld) :: cor_fac												! factored power at a particular k mode		
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld) :: grv																		! vector of Gaussian random variables
+		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,nnx,ny,nz) :: Fk_cor											! vector to hold DFT of fld1, fldp1, fld2, fldp2, ...
+
+		! Initialize random number generator
+		call random_seed(SIZE=nseed)
+		print*, 'nseed = ', nseed
+    allocate(seed(nseed))
+		seed = seed_in*(/ (i-1, i=1,nseed) /)
+    call random_seed(PUT=seed)
+    deallocate(seed)
+
+		! Loop over wavenumbers on lattice
+		do k=1,nz; do j=1,ny; do i=1,nnx
+			if (k>nnz) then; kk = nz+1-k; else; kk=k-1; endif
+			if (j>nny) then; jj = ny+1-j; else; jj=j-1; endif
+			ii = i-1
+			! Interpolate wavenumber
+			rad = sqrt(dble(ii**2 + jj**2 + kk**2))
+			l = floor(rad*os)
+			do m = 1,2*nfld; do n = 1,2*nfld
+				cor_fac(m,n) = (1._dl,0._dl)*(rad-dble(l)/dble(os))*cor_in(m,n,l+1) + (1._dl,0._dl)*(1._dl - rad + dble(l)/dble(os))*cor_in(m,n,l)
+			enddo; enddo
+			! Choleski factorization
+			call zpotrf('L',2*nfld,cor_fac,2*nfld,l)
+			if (l /= 0) then
+				print*, "Factorization warning: l = ", l
+			endif
+			! Initialize GRV vector
+			call random_number(a); call random_number(p)	! a and p are dimension 2*nfld
+			if (i==1 .and. j==1 .and. k==1) then
+				grv(:) = (0._dl,0._dl)
+			elseif (i==1 .or. i==nnx) then
+				grv(:) = (1._dl,0._dl)*sign(sqrt(-2._dl*log(a)),p-0.5_dl)
+			else
+				grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p)
+			endif
+			!print*, "grv norm= ", sqrt((grv*conjg(grv)))
+			do m = 1,2*nfld; do n = 1,2*nfld	! can do this with a where statement
+				if (n<m) then
+					cor_fac(n,m) = (0._dl,0._dl)
+				endif
+			enddo; enddo
+			call ztrmv('L','N','N', 2*nfld, cor_fac, 2*nfld, grv,  1)	! multiply random vector by transposed lower triangular factor of matrix
+			Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon
+			! Apply tophat filter to remove Nyquist frequency
+			if (dble(ii**2+jj**2+kk**2) - kcut**2 > 0) then
+				Fk_cor(:,LATIND) = grv(:)*0.0_dl
+			endif
+		enddo; enddo; enddo
+			
+		! Peform FFT to calculate fluctuations in real space
+		! Add fluctuations to homogeneous fields
+		! Check if /nvol is required, nvol is used when initializing Fk_cor
+		do m=1, nfld
+			Fk(:,:,:) = Fk_cor(2*m-1,:,:,:)
+			call fftw_execute_dft_c2r(planb, Fk, laplace)!!!!! fft to real space
+			fld(m,IRANGE) = fld0(m) + laplace(IRANGE)
+			Fk(:,:,:) = Fk_cor(2*m,:,:,:)
+			call fftw_execute_dft_c2r(planb, Fk, laplace)
+			fldp(m,IRANGE) = dfld0(m) + laplace(IRANGE)
+		enddo
+
+		yscl = 1._dl
+    call calc_metric()
+	end subroutine init_fields_cor_rad
+
+	! Alternative field initialization routine to use for convergence tests. Initializes fields using the Fourier modes of a lattice with double the grid spacing.
+	! to do: order in which modes are initialized must match that used in init_fields_cor2
+	! to do: Nyquist frequency (and above) must be removed, so apply a tophat filter
+	! to do: the filter must remove exactly those modes which are not found on the smaller lattice
+	! to do: those modes which are found on the smaller lattice must be initialized in exactly the same way
+	! to do: check if the lattices match at the even, or odd points
 	subroutine init_fields_cor_conv_test(cor_in, seed_in)
 		complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,nnx,ny,nz) :: cor_in			! Input power/cross spectrum for each k on the lattice
 		integer :: seed_in
@@ -1310,7 +1404,11 @@ program lattice
 				endif
 			enddo; enddo
 			call ztrmv('L','N','N', 2*nfld, cor_fac, 2*nfld, grv,  1)	! multiply random vector by transposed lower triangular factor of matrix
-			Fk_cor(:,i,k_conv(j),k_conv(k)) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj**2+kk**2)/(kcut**2))*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon, modified Nyq filtering
+			Fk_cor(:,i,k_conv(j),k_conv(k)) = grv(:)/nvol!*exp(-0.5*dble(ii**2+jj**2+kk**2)/(kcut**2))*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon, modified Nyq filtering
+			! Apply tophat filter to remove Nyquist frequency
+			if (dble(ii**2+jj**2+kk**2) - kcut**2>0) then
+				Fk_cor(:,LATIND) = grv(:)*0.0_dl
+			endif
 		enddo; enddo; enddo
 		
 		! Peform FFT to calculate fluctuations in real space
