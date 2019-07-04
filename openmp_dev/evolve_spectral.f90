@@ -54,7 +54,7 @@ program lattice
   integer, parameter :: stepsize = 2**5		! Determines number of integration steps between outputing data
 	integer, parameter :: stepslice = 2**2	! Determines number of output steps between outputing a lattice slice
 	integer, parameter :: zslice = nz/2 - 3	! Determines which slice of the lattice is output
-  real(dl), parameter :: tstep0 = 1.0_dl/(2.0_dl**12)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
+  real(dl), parameter :: tstep0 = 1.0_dl/(2.0_dl**14)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
 	real(dl) :: tstep = tstep0 							! time step which is updated
 	real(dl) :: t_cur = 0.0 								! tracks the elapsed conformal time
 !  real(dl), parameter :: tstep = 0.05
@@ -109,17 +109,18 @@ program lattice
   call init_output()
 
 ! initialize fields	
-	!call slow_roll_cor_lat(H0)			! specific routine to provide an initial power spectrum
-	!call mink_cor_lat()							! provides initial power spectrum for Minkowski space
-	!call hank_cor_lat_massless_test(H0)	! provides initial power spectrum for massless Hankel function solutions
+	!call slow_roll_cor_lat(H0)														! specific routine to provide an initial power spectrum
+	!call mink_cor_lat()																	! provides initial power spectrum for Minkowski space on lattice
+	!call hank_cor_lat_massless_test(H0)									! provides initial power spectrum for massless Hankel function solutions on lattice
 	!call mink_cor_lat_scale(1._dl, 0.1_dl)
-	call init_cor_rad_cosmic(5._dl, H0)
+	call init_cor_rad_cosmic(4.0_dl, H0)										! provides initial power spectrum by integrating mode functions on oversampled, isotropic
 	! This loop is for testing field initialization, ordinarily only initialize fileds once
 	!call write_cor_lat()
-	do seed_in=2,2	
-	call init_fields_cor_rad(cor_rad, seed_in)	! initialize fields from oversampled, isotropic power spectrum
-	!call init_fields_cor2(cor_lat,seed_in)	! initializes fields to match a supplied power spectrum
-	!call init_fields_cor_conv_test(cor_lat, seed_in)	! initialization for convergence test
+	do seed_in=1,1
+	print*, "nfld=", nfld
+	call init_fields_cor_rad(cor_rad, seed_in)						! initialize fields from oversampled, isotropic power spectrum
+	!call init_fields_cor2(cor_lat,seed_in)								! initializes fields to match a supplied power spectrum on lattice
+	!call init_fields_cor_conv_test(cor_lat, seed_in)			! initialization for convergence test
 		!call init_fields_ind(seed_in)	! initialize fields indepentently
 		!call make_output(0.)	! output moved here for testing
 	!enddo
@@ -144,7 +145,8 @@ program lattice
 
   call cpu_time(tr1); call system_clock(ti1)
 	!initialize dzeta
-	call get_dzeta([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)
+	!call get_dzeta([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)
+	call get_dzeta_test([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)
 !	zeta = 0.0_dl
 	t_cur = 0.0_dl
 	call make_output(0._dl, 0)
@@ -153,12 +155,16 @@ program lattice
      !call symp6(tstep, stepsize)
 		 call symp8(tstep, stepsize)
      !step zeta
+			!if (yscl>2._dl) then	! start zeta integration late
 		 call zeta_step(stepsize*tstep, [nx,ny,nz], dk, Fk, Fk2, Fk3, planf, planb)
+			!endif
 		 !adapt step size
 		 t_cur = t_cur + stepsize*tstep
 		 call tstep_adapt()
      !call make_output(j*stepsize*tstep)
+			!if (modulo(j,2**5)==0) then
 		 call make_output(t_cur, j)
+			!endif
   enddo
 	enddo
   call cpu_time(tr2); call system_clock(ti2,clock_rate)
@@ -381,7 +387,7 @@ program lattice
       !  	 call sample(0.25, 3.*fld0(1)**2)
       !  	 fldp(j,IRANGE) = dfld0(j) + laplace
       !enddo
-#ifdef TWOFLD
+#ifdef TWOFLD2
 			! This initializing routine uses m2eff calculated for chi0 = 0, if chi0 != 0 the mass matrix is not diagonal.
 			! Should check that for the fluctuations produced using the mean field of chi is valid.
 			!	Initialize phi field
@@ -489,7 +495,7 @@ program lattice
 #ifdef VECTORIZE
 #ifdef ONEFLD
       PE = sum(potential_test(fld(1,IRANGE)))!sum(potential(fld(1,IRANGE),fld(2,IRANGE))) !sum(potential(fld(1,IRANGE))) !
-#elif TWOFLD
+#elif TWOFLD2
 			PE = sum(potential_test(fld(1,IRANGE),fld(2,IRANGE)))!sum(potential(fld(1,IRANGE),fld(2,IRANGE))) !sum(potential(fld(1,IRANGE))) !
 #endif
       KE = sum(fldp(:,IRANGE)**2)
@@ -536,7 +542,7 @@ program lattice
       write(98,'(30(ES22.15,2X))') time, acur, rho, KE, PE, GE, grav_energy(), &
            (rho+grav_energy())/rho, -ysclp**2/12._dl/acur**4, &
            sum(fld(1,IRANGE))/nvol, sum(fldp(1,IRANGE))/nvol
-#elif TWOFLD
+#elif TWOFLD2
 			write(98,'(30(ES22.15,2X))') time, acur, rho, KE, PE, GE, grav_energy(), &
            (rho+grav_energy())/rho, -ysclp**2/12._dl/acur**4, &
            sum(fld(1,IRANGE))/nvol, sum(fldp(1,IRANGE))/nvol, sum(fld(2,IRANGE))/nvol, sum(fldp(2,IRANGE))/nvol
@@ -657,6 +663,7 @@ program lattice
 			open(unit=90,file="lat_slice.out")
 			open(unit=89,file="lat.out")
 			open(unit=88,file="run_param.out")
+			open(unit=87,file='zeta_smooth.out')
 #ifdef THREEDIM
       call init_spectrum_3d(nx,ny,nz)
 #endif
@@ -693,11 +700,15 @@ program lattice
 !      call write_fields(time)
       call dump_rho(time)
 			call write_zeta(time)
+			laplace(IRANGE) = zeta_lat(IRANGE)
+			call lat_smooth(laplace, Fk, 1._dl, planf, planb)
+			call write_moments(laplace, 87)
 			call write_lat_sample(time)
 			if (0 == mod(step, stepslice)) then
-				call write_slice(time,zslice)
+				!call write_slice(time,zslice)
 			endif
-			if (step==0) then
+			if (step==nstep .or. step==80) then
+			!if (step==nstep) then
 				!call write_lat(time)
 			endif
 ! if the WINT is not defined call lat_dump to output the lattice to a binary file 
@@ -746,7 +757,7 @@ program lattice
 			!call crossspec_3d(Fk, Fk2, spec(:,11), spec(:,12))
 
 ! zeta spec output
-			laplace(IRANGE) = zeta_lat(IRANGE)
+			!laplace(IRANGE) = zeta_lat(IRANGE)
 			call spectrum_3d(spec(:,1), laplace, Fk, planf)
 			Fk2=Fk
 			laplace(IRANGE) = dzeta_lat(2,IRANGE)
@@ -761,7 +772,7 @@ program lattice
       	call spectrum_3d(spec(:,4*i+2), laplace, Fk, planf)
       	call crossspec_3d(Fk, Fk2, spec(:,4*i+3),spec(:,4*i+4)) !check ordering for real vs imaginary parts
 			enddo
-#ifdef TWOFLD
+#ifdef TWOFLD2
 ! two field model output
 			laplace(IRANGE) = fld(2,IRANGE)
 			call spectrum_3d(spec(:,9),laplace, Fk3, planf)
@@ -901,7 +912,7 @@ program lattice
 #ifdef ONEFLD
 			!write(90,'(30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
 			write(90,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
-#elif TWOFLD
+#elif TWOFLD2
 			write(90,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice), fld(2,i,j,kslice), fldp(2,i,j,kslice)
 #endif
 		enddo; enddo
@@ -917,7 +928,7 @@ program lattice
 #ifdef ONEFLD
 			!write(90,'(30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
 			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, k, zeta_lat(i,j,k), dzeta_lat(2,i,j,k), fld(1,i,j,k), fldp(1,i,j,k)
-#elif TWOFLD
+#elif TWOFLD2
 			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, k, zeta_lat(i,j,k), dzeta_lat(2,i,j,k), fld(1,i,j,k), fldp(1,i,j,k), fld(2,i,j,k), fldp(2,i,j,k)
 #endif
 		enddo; enddo; enddo
@@ -948,8 +959,8 @@ program lattice
 		!complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,:) :: cor(:,:,:)
 		real(dl), dimension(2*nfld,2*nfld,:) :: cor(:,:,:)
 
-    !integer, parameter :: os = 16, nos = max(nx,ny,nz)*os**2	! over-sampling factor and new number of samples
-    !real, parameter :: dxos = dx/os, dkos = dk/(2*os)					! oversampled lattice spacing and mode spacing
+    integer, parameter :: os = 16, nos = max(nx,ny,nz)*os**2	! over-sampling factor and new number of samples
+    real, parameter :: dxos = dx/os, dkos = dk/(2*os)					! oversampled lattice spacing and mode spacing
     complex, parameter :: w = (0._dl, twopi)									! i*2*pi, used for random phase
 
     !real(dl) :: ker(nos), a(nnx), p(nnx)											! kernal, amplitude, phase
@@ -1247,7 +1258,7 @@ program lattice
 	! subroutine to initialize fields given a power spectrum
 	! n.b. cor_in is provided as
 	subroutine init_fields_cor_rad(cor_in, seed_in)
-		real(dl), dimension(2*nfld,2*nfld,nos) :: cor_in						! power on some oversampled radial profile
+		real(dl), dimension(2*nfld,2*nfld,nos_mode) :: cor_in						! power on some oversampled radial profile
 		integer :: seed_in
 		
 		complex, parameter :: w = (0._dl, twopi)									! i*2*pi, used for random phase
@@ -1280,14 +1291,23 @@ program lattice
 			ii = i-1
 			! Interpolate wavenumber
 			rad = sqrt(dble(ii**2 + jj**2 + kk**2))
-			l = floor(rad*os)
+			l = floor(rad*os_mode)
 			do m = 1,2*nfld; do n = 1,2*nfld
-				cor_fac(m,n) = (1._dl,0._dl)*(rad-dble(l)/dble(os))*cor_in(m,n,l+1) + (1._dl,0._dl)*(1._dl - rad + dble(l)/dble(os))*cor_in(m,n,l)
+				cor_fac(m,n) = (1._dl,0._dl)*(rad-dble(l)/dble(os_mode))*cor_in(m,n,l+1) + (1._dl,0._dl)*(1._dl - rad + dble(l)/dble(os_mode))*cor_in(m,n,l)	
 			enddo; enddo
+			!if (400<=ii**2+jj**2+kk**2) then
+			!	print*, "ii, jj, kk, rad, l = ", ii, jj, kk, rad, l
+			!	print*, cor_fac/(nvol**2)
+			!	print*
+			!endif
 			! Choleski factorization
 			call zpotrf('L',2*nfld,cor_fac,2*nfld,l)
-			if (l /= 0) then
+			if (l /= 0 .and. (i/=1 .or. j/=1 .or. k/=1)) then
 				print*, "Factorization warning: l = ", l
+				print*, "ii, jj, kk, rad, l = ", ii, jj, kk, rad, l
+				print*, cor_fac
+				print*
+				!print*, "i, j, k = ", i ,j ,k
 			endif
 			! Initialize GRV vector
 			call random_number(a); call random_number(p)	! a and p are dimension 2*nfld
@@ -1306,6 +1326,7 @@ program lattice
 			enddo; enddo
 			call ztrmv('L','N','N', 2*nfld, cor_fac, 2*nfld, grv,  1)	! multiply random vector by transposed lower triangular factor of matrix
 			Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon
+			!Fk_cor(:,LATIND) = grv(:)
 			! Apply tophat filter to remove Nyquist frequency
 			if (dble(ii**2+jj**2+kk**2) - kcut**2 > 0) then
 				Fk_cor(:,LATIND) = grv(:)*0.0_dl
@@ -1385,7 +1406,7 @@ program lattice
 				cor_fac(m,n) = cor_in(m,n,i,k_conv(j),k_conv(k))
 			enddo; enddo
 			call zpotrf('L',2*nfld,cor_fac,2*nfld,l)	! Factorize matrix
-			if (l /= 0) then
+			if (l /= 0 .and. (i/=1 .or. j/=1 .or. k/=1)) then
 				print*, "Factorization warning: l = ", l
 			endif
 			! Initialize GRV vector

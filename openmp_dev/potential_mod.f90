@@ -20,10 +20,11 @@ module potential_mod
 
 #ifdef ONEFLD
 	integer, parameter :: nfld=1
-#elif TWOFLD
+#endif
+#ifdef TWOFLD2
 	integer, parameter :: nfld=2
 #endif
-	integer, parameter :: potential_option = 4 ! parameter to choose the form of Delta_V
+	integer, parameter :: potential_option = 5 ! parameter to choose the form of Delta_V
 	! no phi-chi interaction, chi massless: potential_option = 0
 	! trapped plus transverse instability: potential_option = 1
 	! transverse instability blip: potential_option = 2
@@ -34,6 +35,7 @@ module potential_mod
 	integer, parameter :: infl_option = 2 ! parameter to choose form of inflationary potential
 	! phi^4: infl_option = 1
 	! m^2 phi^2: infl_option = 2
+	! const = 3
 
 	! general parameters
 	real(dl), parameter :: mpl=1.e3												! machine units conversion factor, moved from hampiltonian_conformal.f90
@@ -108,7 +110,9 @@ contains
 		if (infl_option==1) then
 			background_V_1fld = 0.25_dl*f1**4
 		elseif (infl_option==2) then
-			background_V_1fld = 0.5_dl*m2*f1**2! + 0.5_dl*11.56_dl
+			background_V_1fld = 0.5_dl*m2*f1**2
+		elseif (infl_option==3) then
+			background_V_1fld = 0.5_dl*m2*3.148_dl**2
 		endif
 	end function background_V_1fld
 
@@ -142,6 +146,8 @@ contains
 			background_dV_1fld = f1**3
 		elseif (infl_option==2) then
 			background_dV_1fld = m2*f1
+		elseif (infl_option==3) then
+			background_dV_1fld = 0._dl
 		endif
 	end function background_dV_1fld
 

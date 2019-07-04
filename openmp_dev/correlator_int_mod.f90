@@ -14,16 +14,16 @@ module correlator_int_mod
 	use analysis
 	use potential_mod
 
-integer, parameter :: os = 16 									! factor by which k is oversampled relative to lattice
-integer, parameter :: nos = max(nx,ny,nz)*os		! number times dkos to reach max k on lattice, as is this has an implicit top hat filter at he Nyquist frequency
-real(dl), parameter :: dkos = dk/dble(os)				! oversampled mode spacing
+integer, parameter :: os_mode = 16 									! factor by which k is oversampled relative to lattice
+integer, parameter :: nos_mode = max(nx,ny,nz)*os_mode		! number times dkos to reach max k on lattice, as is this has an implicit top hat filter at he Nyquist frequency
+real(dl), parameter :: dkos_mode = dk/dble(os_mode)				! oversampled mode spacing
 
-integer, parameter :: nstep_mode = 2**8							! number of intgration steps
+integer, parameter :: nstep_mode = 2**16							! number of intgration steps
 
-real(dl), dimension(2*nfld,2*nfld,nos) :: cor_rad						! power on some oversampled radial profile
+real(dl), dimension(2*nfld,2*nfld,nos_mode) :: cor_rad						! power on some oversampled radial profile
 real(dl), dimension(nfld) :: m2_diag															! masses of fields
 real(dl) :: t_bg																						! time variable
-real(dl) :: dt_bg																						! time step size
+real(dl) :: dt_bg 																					! time step size
 real(dl), dimension(nfld) :: mode_amp												! mode function amplitude
 real(dl), dimension(nfld) :: dmode_amp											! time derivative of mode function amplitude
 real(dl) :: a_bg																						! scale factor of background
@@ -69,20 +69,31 @@ contains
 		integer :: j											! index k_mode
 
 		real(dl), parameter :: norm = nvol/(mpl**2*dx**3)		! normalization constant
+		!real(dl), parameter :: norm = 1._dl/(mpl**2*dx**3*nvol)		! normalization constant
 		
 		cor_rad(:,:,:) = 0._dl
 		call init_m2_diag()
 		! loop this over k_mode
-		do j=1, nos
-			k2_mode = (j*dkos)**2
+		do j=1, nos_mode
+			k2_mode = (j*dkos_mode)**2
 			call mode_init_cosmic(n_ef, hub_in, k2_mode)
+			!print*, 'j, k2, Det cor = ', j, k2_mode, mode_amp(2 )
 			! loop this over integration steps
-			do i=1,nstep_mode
-				call mode_evolve_cosmic()
-			enddo
+			!print*, 'A, dA = ', mode_amp(2), dmode_amp(2)
+			!do i=1,nstep_mode
+				call mode_evolve_cosmic(n_ef,k2_mode)
+				!if (modulo(i,2**6)==0) then
+				!	print*, 't, A, dA = ', t_bg, mode_amp(2), dmode_amp(2)
+				!endif
+			!enddo
+			!print*, 'A, dA = ', mode_amp(2), dmode_amp(2)
 			call set_cor_cosmic(n_ef,j)
+			!print*, 'a = ', exp(-n_ef)*a_bg
+			!print*, 'k = ', sqrt(k2_mode)
+			!print*, 'cor = ', cor_rad(3,3,j), cor_rad(4,4,j)
+			!print*, (exp(-n_ef)**3*a_bg**3)
+			!print*, 'Det cor = ', cor_rad(3,3,j),cor_rad(4,4,j),cor_rad(3,4,j),cor_rad(4,3,j), cor_rad(3,3,j)*cor_rad(4,4,j) - cor_rad(3,4,j)*cor_rad(4,3,j)
 		enddo
-		
 		cor_rad(:,:,:) = norm*cor_rad(:,:,:)
 	end subroutine init_cor_rad_cosmic
 
@@ -93,7 +104,7 @@ contains
 		real(dl) :: k2										! comoving wavenumber squared (with a=1 at start of sim, end of mode integration)
 		
 		t_bg = 0._dl
-		dt_bg = n_ef/hub_bg/dble(nstep_mode)
+		dt_bg = n_ef/(hub_bg*dble(nstep_mode))
 		a_bg = 1.0_dl
 		hub_bg = hub_in
 		mode_amp(:) = 1._dl/sqrt(2._dl*sqrt(m2_diag(:)+k2*exp(2._dl*n_ef)))
@@ -101,12 +112,21 @@ contains
 	end subroutine mode_init_cosmic
 
 	! subroutine to perform one integration step on the mode function
-	subroutine mode_evolve_cosmic()
-		mode_amp(:) = mode_amp(:) + 0.5_dl*dmode_amp(:)*dt_bg
-		dmode_amp(:) = dmode_amp(:) + 0.5_dl*(0.25_dl/mode_amp(:)**3 - (k2*exp(2._dl*n_ef)/a_bg**2 + m2_diag(:) -2.25_dl*hub_bg**2)*mode_amp(:))*dt_bg
-		call background_evolve_cosmic()
-		dmode_amp(:) = dmode_amp(:) + 0.5_dl*(0.25_dl/mode_amp(:)**3 - (k2*exp(2._dl*n_ef)/a_bg**2 + m2_diag(:) -2.25_dl*hub_bg**2)*mode_amp(:))*dt_bg
-		mode_amp(:) = mode_amp(:) + 0.5_dl*dmode_amp(:)*dt_bg
+	subroutine mode_evolve_cosmic(n_ef, k2)
+		real(dl), intent(in) :: n_ef			! number of e-folds before simulation start when modes are matched onto Minkowski space solution
+		real(dl) :: k2										! comoving wavenumber squared (with a=1 at start of sim, end of mode integration)
+		integer :: i
+
+		do i=1,nstep_mode
+			mode_amp(:) = mode_amp(:) + 0.5_dl*dmode_amp(:)*dt_bg
+			dmode_amp(:) = dmode_amp(:) + 0.5_dl*(0.25_dl/mode_amp(:)**3 - (k2*exp(2._dl*n_ef)*exp(-2._dl*hub_bg*t_bg) + m2_diag(:) - 2.25_dl*hub_bg**2)*mode_amp(:))*dt_bg
+			!if (modulo(i,2**4)==1) then
+			!	print*, 't, A, dA = ', t_bg, mode_amp(2), dmode_amp(2)
+			!endif
+			call background_evolve_cosmic()
+			dmode_amp(:) = dmode_amp(:) + 0.5_dl*(0.25_dl/mode_amp(:)**3 - (k2*exp(2._dl*n_ef)*exp(-2._dl*hub_bg*t_bg) + m2_diag(:) - 2.25_dl*hub_bg**2)*mode_amp(:))*dt_bg
+			mode_amp(:) = mode_amp(:) + 0.5_dl*dmode_amp(:)*dt_bg
+		enddo
 	end subroutine mode_evolve_cosmic
 
 	! subroutine to set power from mode functions in cosmic time
@@ -116,10 +136,10 @@ contains
 		integer :: m, n		! field index
 
 		do n=1,nfld
-			cor_rad(n, n, l) = mode_amp(n)**2/exp(-n_ef)**3/a_bg**3
-			cor_rad(n+1, n+1, l) = exp(-n_ef)**3*a_bg**3*(2.25_dl*hub_bg**2*mode_amp(n)**2 + dmode_amp(n)**2 - 3._dl*hub_bg*mode_amp(n)*dmode_amp(n) + 0.25_dl/mode_amp(n)**2)
-			cor_rad(n+1, n, l) = -1.5_dl*hub*mode_amp(n)**2 + dmode_amp(n)*mode_amp(n)
-			cor_rad(n, n+1, l) = cor_rad(n+1, n, l)
+			cor_rad(2*n-1, 2*n-1, l) = mode_amp(n)**2/(exp(-n_ef)**3*a_bg**3)
+			cor_rad(2*n, 2*n, l) = exp(-n_ef)**3*a_bg**3*(2.25_dl*hub_bg**2*mode_amp(n)**2 + dmode_amp(n)**2 - 3._dl*hub_bg*mode_amp(n)*dmode_amp(n) + 0.25_dl/mode_amp(n)**2)
+			cor_rad(2*n, 2*n-1, l) = -1.5_dl*hub_bg*mode_amp(n)**2 + dmode_amp(n)*mode_amp(n)
+			cor_rad(2*n-1, 2*n, l) = cor_rad(2*n, 2*n-1, l)
 		enddo
 	end subroutine set_cor_cosmic
 

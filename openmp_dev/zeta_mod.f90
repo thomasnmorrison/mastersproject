@@ -4,7 +4,7 @@
 
 ! to do: make better use of arrays so that set_fld_temp can be generalized to nfld
 
-! to do: test zeta_lat calculation
+! to do: Clean out redundant variables/subroutines
 ! to do: output equation of state
 
 module zeta_mod
@@ -64,7 +64,8 @@ contains
     complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
 		type(C_PTR) :: planf, planb
 
-		call get_dzeta(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
+		!call get_dzeta(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
+		call get_dzeta_test(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
 		zeta = zeta + 0.5_dl*sum(dzeta)*dt
 		sample_zeta(:) = sample_zeta(:) + 0.5_dl*(sample_dzeta(1,:)+sample_dzeta(2,:))*dt
 		!sample_zeta_f(:,:) = sample_zeta_f(:,:) + 0.5_dl*(sample_dzeta_f(1,:,:)+sample_dzeta_f(2,:,:))*dt
@@ -100,48 +101,6 @@ contains
 			zfp1 = ghstp(ind-nfld,IRANGE)
 	end subroutine set_fld_temp_test
 #endif
-
-	!rename ggrad to gg in order to not overload the namespace
-!	subroutine get_dzeta(nsize, dk, dzeta, yscl, ysclp, f1, f2, fp1, fp2, gg1, gg2, lap1,lap2, gg3, gg4, Fk1, planf, planb)
-!	subroutine get_dzeta(nsize, dk, yscl, ysclp, f1, f2, fp1, fp2, gg1, gg2, lap1,lap2, gg3, gg4, Fk1, planf, planb)
-!	subroutine get_dzeta(nsize, dk, yscl, ysclp, f1, f2, fp1, fp2, gg1, gg2, lap1,lap2, gg3, gg4, Fk1, planf, planb)
-!		integer, dimension(1:3), intent(in) :: nsize
-!		real*8 :: dk	
-!		real(dl), dimension(2) :: dzeta	!making this an array would allow for using a higher order integration scheme
-!		real(dl) :: yscl
-!		real(C_DOUBLE), pointer :: f1(:,:,:), f2(:,:,:), fp1(:,:,:), fp2(:,:,:), gg1(:,:,:), gg2(:,:,:), lap1(:,:,:), lap2(:,:,:), gg3(:,:,:), gg4(:,:,:)
-!    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:)
-!		type(C_PTR) :: planf, planb
-!
-!		real(dl) :: hub
-!		integer :: n1, n2, n3
-!
-!		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
-!		hub = !whatever in terms of yscl and ysclp
-!
-!		dzeta(1) = dzeta(2)	!store old value
-!		
-!		lap1 = fp1
-!		lap2 = f1
-!		call graddotgrad(nsize,lap1,lap2,gg1,Fk1,Fk2,Fk3, planf, planb)
-!		lap1 = fp2
-!		lap2 = f2
-!		call graddotgrad(nsize,lap1,lap2,gg2,Fk1,Fk2,Fk3, planf, planb)
-!		lap1 = f1
-!		lap2 = f2
-!		call laplacian_spectral(n1,n2,n3,lap1,Fk1,dk,planf,planb)
-!		call laplacian_spectral(n1,n2,n3,lap2,Fk1,dk,planf,planb)
-!		call gradient_squared_3d_spectral([n1,n2,n3],f1,Fk1,Fk2,gg3,dk,planf,planb)
-!		call gradient_squared_3d_spectral([n1,n2,n3],f2,Fk1,Fk2,gg4,dk,planf,planb)
-!
-!		f1 = (yscl*(gg1 + gg2 + fp1*lap1 + fp2*lap2) + hub*yscl**4*(gg3 + gg4)) / (3.0_dl*fp1**2 + 3.0_dl*fp2**2 + yscl**4*(gg3 + gg4))	
-!
-!		dzeta(2) = sum(f1(IRANGE))/dble(n1)/dble(n2)/dble(n3)
-!
-!		dzeta(2) = dzeta(2) +
-!		dzeta(2) = yscl**2*dzeta(2) /3.0_dl
-!
-!	end subroutine get_dzeta
 
 	!!!! Updates new value of dzeta into dzeta(2), stores old value of dzeta into dzeta(1)
 	subroutine get_dzeta(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
@@ -191,6 +150,8 @@ contains
 		!zf1 = (yscl*(ggrad1 + ggrad2 + zfp1*zlap1 + zfp2*zlap2) + hub*yscl**4*(ggrad3 + ggrad4)) / (3.0_dl*zfp1**2 + 3.0_dl*zfp2**2 + yscl**4*(ggrad3 + ggrad4))!!!Included extra term
 		!if (nfld==2) then
 			zf1 = (yscl**2*(ggrad1 + ggrad2 + zfp1*zlap1 + zfp2*zlap2)) / (3.0_dl*zfp1**2 + 3.0_dl*zfp2**2 + yscl**4*(ggrad3 + ggrad4))!!!Without extra term and squaring yscl to account for conformal time
+			! First order piece only
+			!zf1 = (yscl**2*(sum(fldp(1,IRANGE))/nvol*zlap1)) / (3.0_dl*sum(fldp(1,IRANGE)**2)/nvol + yscl**4*sum(ggrad3(IRANGE))/nvol)
 		!endif
 		!if (nfld==1) then
 		!	zf1 = (yscl**2*(ggrad1 + zfp1*zlap1)) / (3.0_dl*zfp1**2 + yscl**4*(ggrad3))!!!Without extra term and squaring yscl to account for conformal time
@@ -224,71 +185,89 @@ contains
 		!print*, zf1(6,6,6)
 	end subroutine get_dzeta
 
+! subroutine to get dzeta for an arbitrary number of fields
+! to do: Allow for smoothing of numerator and denominator
+! to do: 
 	subroutine get_dzeta_test(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
 		integer, dimension(1:3), intent(in) :: nsize
 		real*8 :: dk	
     complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
 		type(C_PTR) :: planf, planb
 
-		real(dl) :: hub
 		integer :: n1, n2, n3
 		integer :: i,j
 
 		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
-		hub = -ysclp/(6.0_dl*yscl**2)
 
 		dzeta(1) = dzeta(2)	!store old value
 		dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
 		sample_dzeta(1,:) = sample_dzeta(2,:)
-		!sample_dzeta_f(1,:,:) = sample_dzeta_f(2,:,:)
 
-!#ifdef GHOST
-	!do n=1,2*nfld
-!#elif
-	!do n=1,nfld
-!#endif
-	!enddo
-		call set_fld_temp()
-		zlap1 = zfp1
-		zlap2 = zf1
-		call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
-		!if (nfld==2) then
-			zlap1 = zfp2
-			zlap2 = zf2
-			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad2,Fk1,Fk2,Fk3, planf, planb)
-		!endif
-		zlap1 = zf1
-		call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)
-		!if (nfld==2) then
-			zlap2 = zf2
-			call laplacian_spectral(n1,n2,n3,zlap2,Fk1,dk,planf,planb)
-		!endif
-		zf3 = zf1
-		call graddotgrad(nsize,dk,zf1,zf3,ggrad3,Fk1,Fk2,Fk3, planf, planb)
-		!if (nfld==2) then
-			zf4 = zf2
-			call graddotgrad(nsize,dk,zf2,zf4,ggrad4,Fk1,Fk2,Fk3, planf, planb)
-		!endif		
+		zf1(IRANGE) = 0._dl
+		zf2(IRANGE) = 0._dl
+		! Get numerator of dzeta
+		do i=1,nfld
+			zlap1 = fldp(i,IRANGE)
+			zlap2 = fld(i,IRANGE)
+			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+			zlap1 = fld(i,IRANGE)
+			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
 
-		zf1 = (yscl**2*(ggrad1 + ggrad2 + zfp1*zlap1 + zfp2*zlap2)) / (3.0_dl*zfp1**2 + 3.0_dl*zfp2**2 + yscl**4*(ggrad3 + ggrad4))!!!Without extra term and squaring yscl to account for conformal time
-
-		do i=1,n_sample
-			sample_dzeta(2,i) = zf1(sample_site(i,1),sample_site(i,2),sample_site(i,3))
+			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1
 		enddo
-		dzeta(2) = sum(zf1(IRANGE))/dble(n1)/dble(n2)/dble(n3)
-		dzeta_lat(2,IRANGE) = zf1(IRANGE)
+		! Get denominator of dzeta
+		do i=1,nfld
+			zlap1 = fld(i,IRANGE)
+			zlap2 = fld(i,IRANGE)
+			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+			
+			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
+		enddo			
+		! Calculate dzeta
+		dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
+		dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
 
-		!do i=1,nfld
-		!	if (i==1) then
-		!		zf2 = (yscl**2*(ggrad1 + zfp1*zlap1)) / (3.0_dl*zfp1**2 + 3.0_dl*zfp2**2 + yscl**4*(ggrad3 + ggrad4))
-		!	elseif (i==2) then
-		!		zf2 = (yscl**2*(ggrad2 + zfp2*zlap2)) / (3.0_dl*zfp1**2 + 3.0_dl*zfp2**2 + yscl**4*(ggrad3 + ggrad4))
-		!	endif
-		!	do j=1,n_sample
-				!sample_dzeta_f(2,i,j) = zf2(sample_site(j,1),sample_site(j,2),sample_site(j,3))
-		!	enddo	
+		!do i=1,n_sample
+		!	sample_dzeta(2,i) = dzeta_lat(2,sample_site(i,1),sample_site(i,2),sample_site(i,3))
 		!enddo
+
 	end subroutine get_dzeta_test
+
+! Subroutine that takes in a field as calculated on the lattice and smoothing on some physical scale
+! to do: Check Fourier convention on kernal
+! to do: Check sig_s for 3 dimensions
+	subroutine lat_smooth(f1, Fk1, eps, planf, planb)
+		real(C_DOUBLE), pointer :: f1(:,:,:)								! Field to be smoothed
+		complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:)		! Pointer for FFT of field to be smoothed
+		real(dl) :: eps																			! number times comoving hubble scale on which to smooth
+		real(dl) :: sig_s																		! Smoothing scale (comoving size)
+		real(dl) :: ker																			! Gaussian kernal for smoothing
+		integer :: i,j,k,ii,jj,kk														! lattice labels and wave numbers
+		real(dl) :: rad2																		! radius squared in Fourier space
+		type(C_PTR) :: planf, planb													! FFTW forward and backward plans
+
+		! compute sig_s
+		sig_s = -eps/(ysclp / 6. / yscl)
+
+		! compute forward FFT
+		call fftw_execute_dft_r2c(planf, f1, Fk1)
+
+		! Loop over lattice, multiply FFT by kernal
+		do k=1,nz; if(k>nnz) then; kk = k-nz-1; else; kk=k-1; endif
+			do j=1,ny; if(j>nny) then; jj = j-ny-1; else; jj=j-1; endif
+				do i=1,nnx
+					! compute kernal
+					rad2 = (ii**2 + jj**2 + kk**2)*dk**2
+					ker = exp(-0.5*rad2*sig_s**2)
+					Fk1(LATIND) = Fk1(LATIND)*ker
+				enddo
+			enddo
+		enddo
+		! compute backward FFT and normalize
+		call fftw_execute_dft_c2r(planb, Fk1, f1)
+		f1 = f1/nvol
+
+	end subroutine lat_smooth
 
 
 ! calculates grad(f1).grad(f2) and outputs in gg (f1 and f2 are also overwritten)
@@ -444,8 +423,22 @@ contains
 		!zeta_char = char_func(zeta_lat)
 		write(96,'(30(ES22.15,2x))') time, dzeta(1), dzeta(2), zeta, zeta_moment1, zeta_moment2, zeta_moment3, zeta_moment4!, zeta_char
 		!write(96,*)
-
 	end subroutine write_zeta
+
+! Subroutine to output moments of a field on the lattice
+! to do: 
+	subroutine write_moments(f1, n_file)
+		real(C_DOUBLE), pointer :: f1(:,:,:)								! Field to calculate moments
+		integer :: n_file																		! File number of output
+		real(dl) :: moment1, moment2, moment3, moment4
+		integer, dimension(1:3) :: n_size = (/nx,ny,nz/)
+		
+		moment1 = get_mean_3d(f1, n_size)
+		moment2 = get_moment_3d(f1, moment1, 2, n_size)
+		moment3 = get_moment_3d(f1, moment1, 3, n_size)
+		moment4 = get_moment_3d(f1, moment1, 4, n_size)
+		write(n_file,'(30(ES22.15,2x))') moment1, moment2, moment3, moment4
+	end subroutine write_moments
 
 end module zeta_mod
 

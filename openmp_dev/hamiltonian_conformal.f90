@@ -24,14 +24,15 @@ module Hamiltonian
 
 	!real(dl), parameter :: infl=4.1_dl !inflation parameter y
 
-  real(dl), parameter :: phi0 = 3.2_dl+0.7_dl!3.402544_dl!3.4_dl! + 0.25_dl!sqrt(0.8164/sqrt(g2))!7.511816626277513_dl!2.3393837654714997732962993666073! infl*2.309401076758!7.502897008008175! !		
-  real(dl), parameter :: dphi0 = -dsqrt(2.0_dl/3.0_dl)!-0.796975_dl!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
+  real(dl), parameter :: phi0 = 3.148_dl!3.2_dl+0.7_dl!3.402544_dl!3.4_dl! + 0.25_dl!sqrt(0.8164/sqrt(g2))!7.511816626277513_dl!2.3393837654714997732962993666073! infl*2.309401076758!7.502897008008175! !		
+  real(dl), parameter :: dphi0 = -.794_dl!-dsqrt(2.0_dl/3.0_dl)!-0.796975_dl!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
   real(dl), parameter :: chi0 = 0.0_dl !-3.38704185098e-7!3.9e-7 !
-  real(dl), parameter :: H0 = 1.592_dl !1.460_dl!1.426786_dl! !6.6599_dl!phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !	
+  real(dl), parameter :: H0 = 1.325_dl!1.627_dl !1.460_dl!1.426786_dl! !6.6599_dl!phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !	
 #ifdef ONEFLD			
   real(dl), parameter, dimension(nfld) :: fld0 = (/phi0/)!(/0._dl,0._dl/)!(/phi0,chi0/)!
 	real(dl), parameter, dimension(nfld) :: dfld0 = (/dphi0/)!(/0._dl,0._dl/)!(/dphi0,0.0_dl/)!
-#elif TWOFLD
+#endif
+#ifdef TWOFLD2
 	real(dl), parameter, dimension(nfld) :: fld0 = (/phi0,chi0/)
 	real(dl), parameter, dimension(nfld) :: dfld0 = (/dphi0,0.0_dl/)
 #endif  
@@ -168,13 +169,25 @@ contains
 #endif
 
 #ifdef VECTORIZE
+			! if (sum(fld(1,IRANGE))/nvol > (phi_p+c_4)) then
        fldp(l,IRANGE) = fldp(l,IRANGE) +  &
 !            dt * (yscl**2*laplace(IRANGE) -  yscl**4*modeldv(fld(1,IRANGE),fld(2,IRANGE),l) ) ! call for a two-field model
 !            dt * (yscl**2*laplace(IRANGE) - yscl**4*modeldv(fld(1,IRANGE),l))
 #ifdef ONEFLD
  						 dt * (yscl**2*laplace(IRANGE) - yscl**4*modeldv_test(l,fld(1,IRANGE)))
-#elif TWOFLD
+#endif
+#ifdef TWOFLD2
+						 !dt * (0._dl - yscl**4*modeldv_test(l,fld(1,IRANGE),fld(2,IRANGE))) + dt * (0.5_dl+sign(0.5_dl,fld(1,IRANGE))-(phi_p+c_4))*yscl**2*laplace(IRANGE)! gradient term turned off before instability
+						 !dt * (0._dl - yscl**4*modeldv_test(l,fld(1,IRANGE),fld(2,IRANGE))) ! gradient term removed for testing ballistic solution
 						 dt * (yscl**2*laplace(IRANGE) - yscl**4*modeldv_test(l,fld(1,IRANGE),fld(2,IRANGE)))
+#endif
+			 !else
+				!	fldp(l,IRANGE) = fldp(l,IRANGE) +  &
+#ifdef ONEFLD
+ 				!		 dt * (yscl**2*laplace(IRANGE) - yscl**4*modeldv_test(l,fld(1,IRANGE)))
+#elif TWOFLD2
+				!		 dt * (0._dl - yscl**4*modeldv_test(l,fld(1,IRANGE),fld(2,IRANGE))) ! gradient term removed for testing ballistic solution
+			!endif
 #endif
        GE2 = GE2 - sum(fld(l,IRANGE)*laplace(IRANGE))
 #endif
@@ -194,7 +207,7 @@ contains
 !    PE = sum(potential(fld(1,IRANGE)))
 #ifdef ONEFLD
 		 PE = sum(potential_test(fld(1,IRANGE)))
-#elif TWOFLD
+#elif TWOFLD2
 		 PE = sum(potential_test(fld(1,IRANGE),fld(2,IRANGE)))
 #endif
 #endif
@@ -375,7 +388,7 @@ contains
 !    PE = sum(potential(fld(1,IRANGE)))
 #ifdef ONEFLD
 		 PE = sum(potential_test(fld(1,IRANGE)))
-#elif TWOFLD
+#elif TWOFLD2
 		 PE = sum(potential_test(fld(1,IRANGE),fld(2,IRANGE)))
 #endif
     PE = PE / nvol
