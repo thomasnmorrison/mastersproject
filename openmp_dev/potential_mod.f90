@@ -24,7 +24,7 @@ module potential_mod
 #ifdef TWOFLD2
 	integer, parameter :: nfld=2
 #endif
-	integer, parameter :: potential_option = 5 ! parameter to choose the form of Delta_V
+	integer, parameter :: potential_option = 6 ! parameter to choose the form of Delta_V
 	! no phi-chi interaction, chi massless: potential_option = 0
 	! trapped plus transverse instability: potential_option = 1
 	! transverse instability blip: potential_option = 2
@@ -35,16 +35,16 @@ module potential_mod
 	integer, parameter :: infl_option = 2 ! parameter to choose form of inflationary potential
 	! phi^4: infl_option = 1
 	! m^2 phi^2: infl_option = 2
-	! const = 3
+	! constant potential: infl_option = 3
 
 	! general parameters
-	real(dl), parameter :: mpl=1.e3												! machine units conversion factor, moved from hampiltonian_conformal.f90
+	real(dl), parameter :: mpl=1.e5												! machine units conversion factor, moved from hampiltonian_conformal.f90
 	real(dl), parameter :: m2 = 1.0_dl										! inflaton mass
 	real(dl), parameter :: lambda_chi = 10.0_dl!10.0_dl						! chi self interaction
-	real(dl), parameter :: phi_p = 3.2!*dsqrt(4.0*twopi)	! interaction potential characteristic phi value
+	real(dl), parameter :: phi_p = 8.75_dl!*dsqrt(4.0*twopi)	! interaction potential characteristic phi value
 
 	! potential_option = 1 parameters
-	real(dl), parameter :: g2 = 1.e6!(1.25e4)!/(4.*twopi)!											! phi-chi coupling strength
+	!real(dl), parameter :: g2 = 1.e5!(1.25e4)!/(4.*twopi)!											! phi-chi coupling strength
 	real(dl), parameter :: beta2 = 0.!1.e-3*g2							! instability amplitude
 
 	! potential_option = 2 parameters
@@ -54,17 +54,19 @@ module potential_mod
 	real(dl), parameter :: c_2 = 1.0_dl/(2.0_dl*b_1**2)		! derived parameter for deltaV
 
 	! potential_option = 4 parameters
-	real(dl), parameter :: m2_inf = 50._dl*m2										! asymptotic squared mass of chi
+	real(dl), parameter :: m2_inf = 1._dl*m2										! asymptotic squared mass of chi
 	real(dl), parameter :: m2_p =	-100._dl*m2										! minimum squared mass of chi (at phi=phi_p) 
 	! Derived parameters
-	real(dl), parameter :: c_3 = 2.*sqrt(3.*g2/(m2_inf-m2_p))
+	real(dl), parameter :: c_3 = 0._dl!2.*sqrt(3.*g2/(m2_inf-m2_p))
 	! Also set g2 under "potential_option = 1 parameters"
 
 	! potential_option = 5 parameters
 	! set m2_inf under "potential_option = 4 parameters"
 
 	! potential_option = 6 parameters
-	real(dl), parameter :: c_4 = sqrt(2._dl*(m2_inf-m2_p)/g2)		! width of delta V
+	real(dl), parameter :: c_4 = 0.05_dl															! width of delta V, with g2 as a derived parameter
+	!real(dl), parameter :: c_4 = sqrt(2._dl*(m2_inf-m2_p)/g2)		! width of delta V as a derived parameter
+	real(dl), parameter :: g2 = 2._dl*(m2_inf-m2_p)/c_4**2				! coupling strength as a derived parameter
 	! Also set g2, m2_inf, m2_p, and phi_p
 
 contains
@@ -112,7 +114,7 @@ contains
 		elseif (infl_option==2) then
 			background_V_1fld = 0.5_dl*m2*f1**2
 		elseif (infl_option==3) then
-			background_V_1fld = 0.5_dl*m2*3.148_dl**2
+			background_V_1fld = 0.5_dl*14.2_dl**2
 		endif
 	end function background_V_1fld
 
