@@ -50,7 +50,7 @@ program lattice
   implicit none
 ! Time Stepping Properties
   integer :: j, jj
-  integer, parameter :: nstep = 2**7 			! Determines total number of output steps
+  integer, parameter :: nstep = 2**8 			! Determines total number of output steps
   integer, parameter :: stepsize = 2**6		! Determines number of integration steps between outputing data
 	integer, parameter :: stepslice = 2**2	! Determines number of output steps between outputing a lattice slice
 	integer, parameter :: zslice = nz/2 		! Determines which slice of the lattice is output
@@ -113,7 +113,7 @@ program lattice
 	!call mink_cor_lat()																	! provides initial power spectrum for Minkowski space on lattice
 	!call hank_cor_lat_massless_test(H0)									! provides initial power spectrum for massless Hankel function solutions on lattice
 	!call mink_cor_lat_scale(1._dl, 0.1_dl)
-	call init_cor_rad_cosmic(2.5_dl, H0)										! provides initial power spectrum by integrating mode functions on oversampled, isotropic
+	call init_cor_rad_cosmic(4.0_dl, H0)										! provides initial power spectrum by integrating mode functions on oversampled, isotropic
 	! This loop is for testing field initialization, ordinarily only initialize fileds once
 	!call init_cor_rad_cosmic_z(1.0_dl, dphi0, H0)					! provides initial power spectrum for fields and zeta
 	!call write_cor_lat()
@@ -713,9 +713,9 @@ program lattice
 				call write_slice(time,zslice)
 				call write_zeta_partial(time, zslice, 86)
 			endif
-			if (step==nstep .or. step==80) then
-			!if (step==nstep) then
-				!call write_lat(time)
+			!if (step==nstep .or. step==80) then
+			if (step==nstep) then
+				call write_lat(time)
 			endif
 ! if the WINT is not defined call lat_dump to output the lattice to a binary file 
 !#ifndef WINT
@@ -961,7 +961,7 @@ program lattice
 			!write(90,'(30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
 			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, k, zeta_lat(i,j,k), dzeta_lat(2,i,j,k), fld(1,i,j,k), fldp(1,i,j,k)
 #elif TWOFLD2
-			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, k, zeta_lat(i,j,k), dzeta_lat(2,i,j,k), fld(1,i,j,k), fldp(1,i,j,k), fld(2,i,j,k), fldp(2,i,j,k)
+			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, zeta_lat(i,j,k), dzeta_lat(2,i,j,k), zeta_part(1,i,j,k), zeta_part(2,i,j,k),fld(1,i,j,k), fldp(1,i,j,k), fld(2,i,j,k), fldp(2,i,j,k)
 #endif
 		enddo; enddo; enddo
 		write(89,*)		
