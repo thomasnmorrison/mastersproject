@@ -101,6 +101,53 @@ contains
     where (W /= 0.0) S = S/W!/dble(nx)/dble(ny)/dble(nz)
   end subroutine spectrum_3d
 
+! to do: modify how this routine deals with phases
+	subroutine spectrum_3d_test(S, f, Fk, plan)
+    real(dl), dimension(1:ns) :: S
+    real(C_DOUBLE) :: f(:,:,:)
+    complex(C_DOUBLE_COMPLEX) :: Fk(:,:,:)
+    type(C_PTR), optional :: plan
+
+    type(C_PTR) :: plan2
+    integer :: i,j,k,ii,jj,kk
+    real(dl) :: p, c(2), W(ns)
+    integer :: l
+    integer :: n1,n2,n3,nn1,nn2,nn3 ! find a better solution to get OMP working
+
+    n1=nx;n2=ny;n3=nz;nn1=nnx;nn2=nny;nn3=nnz
+! Do the FFT here
+!    plan = fftw_plan_dft_r2c_3d(nz,ny,nx,f,Fk,FFTW_ESTIMATE)
+    if (present(plan)) then
+       call fftw_execute_dft_r2c(plan, f, Fk)
+    else
+       plan2 = fftw_plan_dft_r2c_3d(nz,ny,nx,f,Fk,FFTW_ESTIMATE)
+       call dfftw_execute_dft_r2c(plan2, f, Fk)
+       call dfftw_destroy_plan(plan2)
+    endif
+
+    W = 0.
+    S = 0.
+!$OMP PARALLEL DO PRIVATE(ii,jj,kk,p,l,c) FIRSTPRIVATE(n1,n2,n3,nn1,nn2,nn3) REDUCTION(+:W,S)
+    do k=1,n3; if (k<=nn3) then; kk=k-1; else; kk=n3+1-k; endif
+       do j=1,n2; if (j<=nn2) then; jj=j-1; else; jj=n2+1-j; endif
+          do i=1,n1; if (i<=nn1) then; ii=i-1; else; ii=n1+1-i; endif
+							!print*,i,j,k
+             p = sqrt(dble(ii**2 + jj**2 + kk**2)); l=floor(p)
+             c = (1.0 - (/l-p,l+1-p/)**2)**2
+
+             S(l+1:l+2) = S(l+1:l+2) + c*Fk(ii+1,j,k)*conjg(Fk(ii+1,j,k))
+             W(l+1:l+2) = W(l+1:l+2) + c
+						 !if (Fk(ii+1,j,k)*conjg(Fk(ii+1,j,k)) == 0._dl) then
+						 	!print*,Fk(ii+1,j,k), Fk(ii+1,j,k)*conjg(Fk(ii+1,j,k)), i,j,k
+						 !endif
+          enddo
+       enddo
+    enddo
+!$OMP END PARALLEL DO
+    
+    where (W /= 0.0) S = S/W!/dble(nx)/dble(ny)/dble(nz)
+	end subroutine spectrum_3d_test
+
   subroutine spectrum_2d(S, f, Fk, plan)
     real(dl), dimension(1:ns) :: S
     real(C_DOUBLE), pointer :: f(:,:)

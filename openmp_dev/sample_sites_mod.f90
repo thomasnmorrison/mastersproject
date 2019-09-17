@@ -9,7 +9,7 @@ module sample_sites_mod
 
 	implicit none
 
-	integer, parameter :: n_sample = 32!512! !1!
+	integer, parameter :: n_sample = 1!512! !1!
 	! Hard coded for three dimensions
 	integer, dimension(n_sample,3) :: sample_site
 	real(dl), dimension(n_sample) :: sample_zeta

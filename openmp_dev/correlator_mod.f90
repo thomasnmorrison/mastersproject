@@ -17,10 +17,10 @@ integer, parameter :: nos = max(nx,ny,nz)*os**2
 real(dl), parameter :: dxos = dx/os							! oversampled grid spacing
 real(dl), parameter :: dkos = dk/(2*os)					! oversampled mode spacing
 
-!complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,nos) :: cor
+complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,nos) :: cor
 real(dl), dimension(2*nfld,2*nfld,nos) :: cor
 real(dl), dimension(2*nfld,2*nfld,nos) :: cor_rad					! radial profile
-!real(dl), dimension(2*nfld,2*nfld,nnx,ny,nz) :: cor_lat		! all modes on lattice
+real(dl), dimension(2*nfld,2*nfld,nnx,ny,nz) :: cor_lat		! all modes on lattice
 complex(C_DOUBLE_COMPLEX), dimension(2*nfld,2*nfld,nnx,ny,nz) :: cor_lat		! all modes on lattice
 real(dl), dimension(nfld) :: m2_diag
 
@@ -185,8 +185,51 @@ contains
 		enddo
 		enddo
 
-		!cor_lat = norm*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
+		cor_lat = norm*cor_lat	! nvol from FFT convension (redundant with an nvol divison when initializing fields)
 	end subroutine mink_cor_lat
+
+	! Subroutine to initialize correltaion matrix by integrating mode functions
+	! Assumes fields are indepentent in the past
+	! Assumes fields are constant mass in the past
+	! Assumes H is sourced by a background, for now assuming H=const
+	! to do: initialize amp_lat and damp_lat
+	! to do: figure out if an adaptive timestep is needed
+	! to do: check machine units/DFT convensions
+!	subroutine mode_int_cor_lat(hub, nefold)
+!		real(dl) :: hub							! input of Hubble parameter
+!		real(dl) :: nefold					! input for number of e-folds in the past mode functions are matched onto Minkowski mode functions
+!		real(dl), dimension(nfld,nnx,ny,nz) :: amp_lat	! mode amplitude
+!		real(dl), dimension(nfld,nnx,ny,nz) :: damp_lat	! mode amplitude derivative
+!		integer :: i,j,k,ii,jj,kk		!	lattice indicies, Fourier modes
+!		integer :: n								! field index 
+!		real(dl) :: rad2						! comoving wavenumber
+!		real(dl), parameter	:: norm	= nvol/(mpl**2*dx**3)! normalization constant
+
+!		cor_lat(:,:,:,:,:) = 0._dl*(1._dl,0._dl)	! initialize zero power in all modes
+!		call init_m2_diag()					! initialize field masses
+!		! Loop over all modes and set initial conditions
+!		do k=1,nz; if (k>nnz) then; kk = nz+1-k; else; kk=k-1; endif
+!		do j=1,ny; if (j>nny) then; jj = ny+1-j; else; jj=j-1; endif
+!			do i=1,nnx
+!				rad2 = dble((i-1)**2) + dble(jj**2) + dble(kk**2)
+!				rad2 = rad2*(1._dl-exp(-nefold))*dk**2/hub		! wavenumber n-efolds before start of sim
+!				do n=1,nfld
+!					amp_lat(n,LATIND) = 
+!					damp_lat(n,LATIND) = 
+!				enddo 
+!			enddo
+!		enddo
+!		enddo
+!		! Loop over evolution
+
+!		! Initialize cor_lat
+!		do n=1,nfld
+!			cor_lat(2*n-1,2*n-1,:,:,:) = (1._dl,0._dl)*	! fld-fld
+!			cor_lat(2*n,2*n,:,:,:) = (1._dl,0._dl)*	! dfld-dfld
+!			cor_lat(2*n,2*n-1,:,:,:) = (1._dl,0._dl)*	! dfld-fld (real part)
+!			cor_lat(2*n-1,2*n,:,:,:) = (1._dl,0._dl)*	! fld-dfld (real part)
+!		enddo
+!	end subroutine mode_int_cor_lat
 
 	! Subroutine to initialize a correlation matrix for the Hankel function modes in the massless case
 	! n.b. the correlation matrix that is initialized here will have the same value as the initial

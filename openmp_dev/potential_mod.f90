@@ -24,7 +24,7 @@ module potential_mod
 #ifdef TWOFLD2
 	integer, parameter :: nfld=2
 #endif
-	integer, parameter :: potential_option = 6 ! parameter to choose the form of Delta_V
+	integer, parameter :: potential_option = 0 ! parameter to choose the form of Delta_V
 	! no phi-chi interaction, chi massless: potential_option = 0
 	! trapped plus transverse instability: potential_option = 1
 	! transverse instability blip: potential_option = 2
