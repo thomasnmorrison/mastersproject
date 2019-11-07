@@ -14,10 +14,15 @@
 ! to do: calculate linear/non-linear parts of zeta splits								- done
 ! to do: output linear/non-linear parts of zeta splits									- done
 
-! to do: make subroutine that decomposes the fields into various components ie longitudinal and transverse
-! to do: make subroutine to calculate zeta split phi - chi
-! to do: make subroutine to calculate zeta split longitudinal - transverse
-! to do: make subroutine to calculate zeta split slow roll logintudinal - transverse
+
+! to do: Change zeta integrator to be first order and add a parameter to evolve_spectral.f90 to control how many 
+! zeta integration steps are between each output
+! to do: once zeta integrator is changed to first order change dzeta declaration to not store old value
+! to do: write new zeta by parts subroutine for following calculation
+! to do: Calculate zeta split by splitting rho into terms
+! kinetic + potential and gradient
+! kinetic and potential + gradient
+! to do: write subroutine to output the unweighted integrated zeta by parts
 
 module zeta_mod
 
@@ -319,6 +324,56 @@ contains
 		!enddo
 	end subroutine get_dzeta_part
 
+! Subroutine to get dzeta including the potential term that I missed in get_dzeta_part
+! Also computes rho_A + P_A
+! n.b. This should make redundant the variable dzeta_lat in terms of rho_epsilon and dzeta_part
+! n.b. Can make this a first order integrator and adjust stepsize if necessary
+! n.b. I think the zf2 calculation is redundant, no it calcs a different graddotgrad
+! n.b. the zf1 variable is redundant, just use dzeta_part
+	subroutine get_dzeta_part_pot(nsize, dk, planf, planb)
+		integer, dimension(1:3), intent(in) :: nsize
+		real*8 :: dk	
+    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
+		type(C_PTR) :: planf, planb
+
+		integer :: n1, n2, n3
+		integer :: i,j
+
+		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
+
+		! Get numerator of dzeta
+		zf1(IRANGE) = 0._dl
+		do i=1,nfld
+			zlap1 = fldp(i,IRANGE)
+			zlap2 = fld(i,IRANGE)
+			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+			zlap1 = fld(i,IRANGE)
+			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
+			
+			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1										! Update this line to include potential term
+			dzeta_part(2,2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
+			dzeta_part(2,2*i,IRANGE) = ggrad1
+		enddo
+		
+		! Get epsilon_part
+		zf2(IRANGE) = 0._dl
+		do i=1,nfld
+			zlap1 = fld(i,IRANGE)
+			zlap2 = fld(i,IRANGE)
+			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+			
+			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
+			epsilon_part(i,IRANGE) = 1.5_dl*(fldp(i,IRANGE)**2)/yscl**6 + 0.5_dl*(ggrad1)/yscl**2
+			dzeta_part(2,2*i-1,IRANGE) = yscl**2 *dzeta_part(2,2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+			dzeta_part(2,2*i,IRANGE) = yscl**2 *dzeta_part(2,2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+		enddo			
+		! Calculate dzeta
+		dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
+		dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
+
+
+	end subroutine get_dzeta_part_pot
+
 ! Subroutine to calculate dzeta using a smoothed stress energy tensor
 ! to do: use lat_smooth to smooth stress energy tensor
 ! to do: update variables for smoothing scale
@@ -407,6 +462,86 @@ contains
 
 	end subroutine lat_smooth
 
+! calculates grad(f1).grad(f2) and outputs in gg (f1 and f2 are also overwritten)
+! check if I can do this by updating a partial sum
+
+	subroutine graddotgrad_test(nsize, dk, f1, f2, gg, Fk1, Fk2, Fk3, planf, planb)
+		integer, dimension(1:3), intent(in) :: nsize
+		real*8 :: dk
+		real(C_DOUBLE), pointer :: f1(:,:,:), f2(:,:,:), gg(:,:,:)!, g1(:,:,:), g2(:,:,:), g3(:,:,:)
+		complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:), Fk2(:,:,:), Fk3(:,:,:)!, Fk(:,:,:)
+		type(C_PTR) :: planf, planb
+
+		integer :: n1, n2, n3
+		integer :: nn1, nn2, nn3
+    integer :: i,j,k,ii,jj,kk
+		!real(C_DOUBLE) :: kcur!new
+    complex(C_DOUBLE_COMPLEX), parameter :: i_imag = (0.,1.)!new
+		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
+		nn1 = n1/2+1; nn2=n2/2+1; nn3=n3/2+1
+
+		call fftw_execute_dft_r2c(planf, f1, Fk1)
+		call fftw_execute_dft_r2c(planf, f2, Fk2)
+
+		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
+			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
+				do i=1,nn1
+					Fk3(i,j,k) = i_imag*dble((i-1)*dk)*Fk1(i,j,k)
+				enddo
+			enddo
+		enddo
+		call fftw_execute_dft_c2r(planb, Fk3, f1)
+		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
+			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
+				do i=1,nn1
+					Fk3(i,j,k) = i_imag*dble((i-1)*dk)*Fk2(i,j,k)
+				enddo
+			enddo
+		enddo
+		call fftw_execute_dft_c2r(planb, Fk3, f2)
+
+		gg = f1*f2 !using i_imag
+
+		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
+			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
+				do i=1,nn1
+					Fk3(i,j,k) = i_imag*dble(jj*dk)*Fk1(i,j,k)
+				enddo
+			enddo
+		enddo
+		call fftw_execute_dft_c2r(planb, Fk3, f1)
+		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
+			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
+				do i=1,nn1
+					Fk3(i,j,k) = i_imag*dble(jj*dk)*Fk2(i,j,k)
+				enddo
+			enddo
+		enddo
+		call fftw_execute_dft_c2r(planb, Fk3, f2)
+
+		gg = gg+f1*f2 !using i_imag
+		
+		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
+			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
+				do i=1,nn1
+					Fk3(i,j,k) = i_imag*dble(kk*dk)*Fk1(i,j,k)
+				enddo
+			enddo
+		enddo
+		call fftw_execute_dft_c2r(planb, Fk3, f1)
+		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
+			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
+				do i=1,nn1
+					Fk3(i,j,k) = i_imag*dble(kk*dk)*Fk2(i,j,k)
+				enddo
+			enddo
+		enddo
+		call fftw_execute_dft_c2r(planb, Fk3, f2)
+
+		gg = gg+f1*f2 !using i_imag
+		gg = gg /dble(n1)**2 /dble(n2)**2 /dble(n3)**2
+
+	end subroutine graddotgrad_test
 
 ! calculates grad(f1).grad(f2) and outputs in gg (f1 and f2 are also overwritten)
 ! check if I can do this by updating a partial sum
@@ -428,13 +563,9 @@ contains
 		call fftw_execute_dft_r2c(planf, f1, Fk1)
 		call fftw_execute_dft_r2c(planf, f2, Fk2)
 
-		!do k=1,n3; if (k>nn3) then; kk=nn3+1-k;
-
-		!!!!!!!! putting in i_imag instead of factoring it out, to test if the c2r fft handles things properly if i_imag is factored out
 		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
 			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
 				do i=1,nn1
-					!Fk3(i,j,k) = dble((i-1)*dk)*Fk1(i,j,k)
 					Fk3(i,j,k) = i_imag*dble((i-1)*dk)*Fk1(i,j,k)
 				enddo
 			enddo
@@ -443,20 +574,17 @@ contains
 		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
 			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
 				do i=1,nn1
-					!Fk3(i,j,k) = dble((i-1)*dk)*Fk2(i,j,k)
 					Fk3(i,j,k) = i_imag*dble((i-1)*dk)*Fk2(i,j,k)
 				enddo
 			enddo
 		enddo
 		call fftw_execute_dft_c2r(planb, Fk3, f2)
 
-		!gg = -f1*f2
 		gg = f1*f2 !using i_imag
 
 		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
 			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
 				do i=1,nn1
-					!Fk3(i,j,k) = dble(jj*dk)*Fk1(i,j,k)
 					Fk3(i,j,k) = i_imag*dble(jj*dk)*Fk1(i,j,k)
 				enddo
 			enddo
@@ -465,19 +593,17 @@ contains
 		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
 			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
 				do i=1,nn1
-					!Fk3(i,j,k) = dble(jj*dk)*Fk2(i,j,k)
 					Fk3(i,j,k) = i_imag*dble(jj*dk)*Fk2(i,j,k)
 				enddo
 			enddo
 		enddo
 		call fftw_execute_dft_c2r(planb, Fk3, f2)
-		!gg = gg-f1*f2
+
 		gg = gg+f1*f2 !using i_imag
 		
 		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
 			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
 				do i=1,nn1
-					!Fk3(i,j,k) = dble(kk*dk)*Fk1(i,j,k)
 					Fk3(i,j,k) = i_imag*dble(kk*dk)*Fk1(i,j,k)
 				enddo
 			enddo
@@ -486,49 +612,14 @@ contains
 		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
 			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
 				do i=1,nn1
-					!Fk3(i,j,k) = dble(kk*dk)*Fk2(i,j,k)
 					Fk3(i,j,k) = i_imag*dble(kk*dk)*Fk2(i,j,k)
 				enddo
 			enddo
 		enddo
 		call fftw_execute_dft_c2r(planb, Fk3, f2)
-		!gg = gg-f1*f2
+
 		gg = gg+f1*f2 !using i_imag
 		gg = gg /dble(n1)**2 /dble(n2)**2 /dble(n3)**2
-
-!		!!!!Alrternative calculation with fewer lines, more variables!!!!
-!		call fftw_execute_dft_r2c(planf, f1, Fk)
-!		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
-!			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
-!				do i=1,nn1
-					! this is now a vector so I will need separate DFTs
-!					Fk1(i,j,k) = dble((i-1)*dk)*Fk(i,j,k)
-!					Fk2(i,j,k) = dble(jj*dk)*Fk(i,j,k)
-!					Fk3(i,j,k) = dble(kk*dk)*Fk(i,j,k)					
-!				enddo
-!			enddo
-!		enddo
-!		call fftw_execute_dft_c2r(planb, Fk1, g1)
-!		call fftw_execute_dft_c2r(planb, Fk2, g2)
-!		call fftw_execute_dft_c2r(planb, Fk3, g3)
-!		
-!		call fftw_execute_dft_r2c(planf, f2, Fk)
-!		do k=1,n3; if(k>nn3) then; kk = k-n3-1; else; kk=k-1; endif
-!			do j=1,n2; if(j>nn2) then; jj = j-n2-1; else; jj=j-1; endif
-!				do i=1,nn1
-!					! this is now a vector so I will need separate DFTs
-!					Fk1(i,j,k) = dble((i-1)*dk)*Fk(i,j,k)
-!					Fk2(i,j,k) = dble(jj*dk)*Fk(i,j,k)
-!					Fk2(i,j,k) = dble(kk*dk)*Fk(i,j,k)					
-!				enddo
-!			enddo
-!		enddo
-!		call fftw_execute_dft_c2r(planb, Fk1, f1)
-!		call fftw_execute_dft_c2r(planb, Fk2, f2)
-!		call fftw_execute_dft_c2r(planb, Fk3, gg)
-
-!		f1(:,:,:) = -f1(:,:,:)*g1(:,:,:) - f2(:,:,:)*g2(:,:,:) - gg(:,:,:)*g3(:,:,:)
-!		f1 = f1 /dble(n1) /dble(n2) /dble(n3)
 
 	end subroutine graddotgrad
 
