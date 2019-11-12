@@ -5,7 +5,7 @@ module params
 	logical, parameter :: run_hom = .FALSE.!.TRUE.!  set to true for a homogeneous field calculation
 	!integer, parameter :: nfld=2
 	!integer, parameter :: os = 16	! Oversampling factor
-  integer, parameter :: nx=64, ny=64, nz=64
+  integer, parameter :: nx=32, ny=32, nz=32
   integer, parameter :: nnx=nx/2+1, nny=ny/2+1, nnz=nz/2+1
   integer, parameter :: nn = min(nnx,nny,nnz)
 

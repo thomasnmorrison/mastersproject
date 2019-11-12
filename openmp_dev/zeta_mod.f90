@@ -15,14 +15,9 @@
 ! to do: output linear/non-linear parts of zeta splits									- done
 
 
-! to do: Change zeta integrator to be first order and add a parameter to evolve_spectral.f90 to control how many 
-! zeta integration steps are between each output
 ! to do: once zeta integrator is changed to first order change dzeta declaration to not store old value
-! to do: write new zeta by parts subroutine for following calculation
-! to do: Calculate zeta split by splitting rho into terms
-! kinetic + potential and gradient
-! kinetic and potential + gradient
-! to do: write subroutine to output the unweighted integrated zeta by parts
+! to do: dzeta_lat is a redundant variable with dzeta_part, so at some point can be cleared our
+! to do: compile and debug
 
 module zeta_mod
 
@@ -36,25 +31,22 @@ module zeta_mod
 	use moments_mod
 
 	real(dl) :: zeta = 0.0_dl
-	real(dl), dimension(2) :: dzeta = (/0.0_dl,0.0_dl/)
-	real(dl), dimension(IRANGE) :: zeta_lat
-	real(dl), dimension(2,IRANGE) :: dzeta_lat !dzeta/dtau
-	!real(dl), dimension(2,IRANGE) :: dzeta_lat_temp	! 1st component is numerator of dzeta, 2nd component is denominator of dzeta
-	real(dl), dimension(nfld,IRANGE) :: epsilon_part	! components rho*x_A*epsilon_A
-	real(dl), dimension(2*nfld,IRANGE) :: zeta_part			! zeta component calculated from individual fields (and linear/non-linear)
-	real(dl), dimension(2,2*nfld,IRANGE) :: dzeta_part	! dzeta/dtau component calculated from individual fields
+	!real(dl), dimension(2) :: dzeta = (/0.0_dl,0.0_dl/)
+	real(dl) :: dzeta = 0.0_dl															!	dzeta/dtau lattice average
+	real(dl), dimension(IRANGE) :: zeta_lat									! zeta on the lattice
+	!real(dl), dimension(2,IRANGE) :: dzeta_lat 						!	dzeta/dtau
+	real(dl), dimension(IRANGE) :: dzeta_lat 								!	dzeta/dtau for first order integrator
+	!real(dl), dimension(2,IRANGE) :: dzeta_lat_temp				! 1st component is numerator of dzeta, 2nd component is denominator of dzeta
+	real(dl), dimension(nfld,IRANGE) :: epsilon_part				! components rho*x_A*epsilon_A, slpit as kinetic, gradient
+	!real(dl), dimension(2*nfld,IRANGE) :: zeta_part				! zeta component calculated from individual fields (and linear/non-linear)
+	!real(dl), dimension(2,2*nfld,IRANGE) :: dzeta_part			! dzeta/dtau component calculated from individual fields
+	real(dl), dimension(4,IRANGE) :: zeta_part							! zeta component calculated from K+V, G, K, G+V
+	real(dl), dimension(4,IRANGE) :: dzeta_part							! dzeta/dtau component calculated from K+V, G, K, G+V
 	
 	! additional pointers needed for calculating dzeta
 	real(C_DOUBLE), pointer :: ggrad1(:,:,:)
-!	real(C_DOUBLE), pointer :: ggrad2(:,:,:)
-!	real(C_DOUBLE), pointer :: ggrad3(:,:,:)
-!	real(C_DOUBLE), pointer :: ggrad4(:,:,:)
 	real(C_DOUBLE), pointer :: zf1(:,:,:)
 	real(C_DOUBLE), pointer :: zf2(:,:,:)
-!	real(C_DOUBLE), pointer :: zf3(:,:,:)!new
-!	real(C_DOUBLE), pointer :: zf4(:,:,:)!new
-!	real(C_DOUBLE), pointer :: zfp1(:,:,:)
-!	real(C_DOUBLE), pointer :: zfp2(:,:,:)
 	real(C_DOUBLE), pointer :: zlap1(:,:,:)
 	real(C_DOUBLE), pointer :: zlap2(:,:,:)
 	complex(C_DOUBLE_COMPLEX), pointer :: Fk3(:,:,:)
@@ -71,9 +63,9 @@ contains
 
 	subroutine zeta_init()
 		zeta = 0.0_dl
-		dzeta(:) = 0.0_dl
+		dzeta = 0.0_dl	!dzeta(:) = 0.0_dl
 		zeta_lat(IRANGE) = 0.0_dl
-		dzeta_lat(:,IRANGE) = 0.0_dl
+		dzeta_lat(IRANGE) = 0.0_dl	!dzeta_lat(:,IRANGE) = 0.0_dl
 	end subroutine zeta_init
 
 	!!!! Step zeta integration using trapazoid rule
@@ -88,19 +80,43 @@ contains
 		!call get_dzeta_test(nsize, dk, Fk1, Fk2, Fk3, planf, planb)			! call for dzeta calc no smoothing
 		!call get_dzeta_smooth(nsize, dk, Fk1, Fk2, Fk3, planf, planb)		! call for dzeta calc from smoothed T
 		call get_dzeta_part(nsize, dk, Fk1, Fk2, Fk3, planf, planb)				! call for dzeta calc with components
-		zeta = zeta + 0.5_dl*sum(dzeta)*dt
-		sample_zeta(:) = sample_zeta(:) + 0.5_dl*(sample_dzeta(1,:)+sample_dzeta(2,:))*dt
+		zeta = zeta + dzeta*dt	!zeta = zeta + 0.5_dl*sum(dzeta)*dt
+		!sample_zeta(:) = sample_zeta(:) + 0.5_dl*(sample_dzeta(1,:)+sample_dzeta(2,:))*dt
 		!sample_zeta_f(:,:) = sample_zeta_f(:,:) + 0.5_dl*(sample_dzeta_f(1,:,:)+sample_dzeta_f(2,:,:))*dt
-		zeta_lat(IRANGE) = zeta_lat(IRANGE) + 0.5_dl*(dzeta_lat(1,IRANGE)+dzeta_lat(2,IRANGE))*dt
+		!zeta_lat(IRANGE) = zeta_lat(IRANGE) + 0.5_dl*(dzeta_lat(1,IRANGE)+dzeta_lat(2,IRANGE))*dt
+		zeta_lat(IRANGE) = zeta_lat(IRANGE) + dzeta_lat(IRANGE)*dt
 		do i=1,nfld
 			!zeta_part(i,IRANGE) = zeta_part(i,IRANGE) + 0.5_dl*(dzeta_part(1,i,IRANGE) &
 			!											+ epsilon_part(i,IRANGE)*dzeta_part(2,i,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1)))*dt
-			zeta_part(2*i-1,IRANGE) = zeta_part(2*i-1,IRANGE) + 0.5_dl*(dzeta_part(1,2*i-1,IRANGE) &
-														+ epsilon_part(i,IRANGE)*dzeta_part(2,2*i-1,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1)))*dt
-			zeta_part(2*i,IRANGE) = zeta_part(2*i,IRANGE) + 0.5_dl*(dzeta_part(1,2*i,IRANGE) &
-														+ epsilon_part(i,IRANGE)*dzeta_part(2,2*i,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1)))*dt
+			!zeta_part(2*i-1,IRANGE) = zeta_part(2*i-1,IRANGE) + 0.5_dl*(dzeta_part(1,2*i-1,IRANGE) &
+			!											+ epsilon_part(i,IRANGE)*dzeta_part(2,2*i-1,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1)))*dt
+			!zeta_part(2*i,IRANGE) = zeta_part(2*i,IRANGE) + 0.5_dl*(dzeta_part(1,2*i,IRANGE) &
+			!											+ epsilon_part(i,IRANGE)*dzeta_part(2,2*i,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1)))*dt
+			zeta_part(2*i-1,IRANGE) = zeta_part(2*i-1,IRANGE) + dzeta_part(2*i-1,IRANGE)*dt
+			zeta_part(2*i,IRANGE) = zeta_part(2*i,IRANGE) + dzeta_part(2*i,IRANGE)*dt
 		enddo
 	end subroutine zeta_step
+
+	! Subroutine to step zeta intgration using Euler method with K, G, K+V, G+V split
+	! n.b. this subroutine uses a only one value of dzeta
+	! n.b. this subroutine integrates zeta_part without weighting
+	subroutine zeta_step_kgv(dt, nsize, dk, Fk1, Fk2, Fk3, planf, planb)
+		real(dl) :: dt
+		integer, dimension(1:3), intent(in) :: nsize
+		integer :: i
+		real*8 :: dk	
+    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
+		type(C_PTR) :: planf, planb
+
+		call get_dzeta_part_kgv(nsize, dk, Fk1, Fk2, Fk3, planf, planb)		! call for dzeta calc with K, G, V components
+
+		zeta = zeta + dzeta*dt
+		zeta_lat(IRANGE) = zeta_lat(IRANGE) + dzeta_lat(IRANGE)*dt
+		zeta_part(1,IRANGE) = zeta_part(1,IRANGE) + dzeta_part(1,IRANGE)*dt	! K unweighted
+		zeta_part(2,IRANGE) = zeta_part(2,IRANGE) + dzeta_part(2,IRANGE)*dt	! G unweighted
+		zeta_part(3,IRANGE) = zeta_part(3,IRANGE) + dzeta_part(3,IRANGE)*dt	! K+V unweighted
+		zeta_part(4,IRANGE) = zeta_part(4,IRANGE) + dzeta_part(4,IRANGE)*dt	! G+V unweighted
+	end subroutine zeta_step_kgv
 
 !	subroutine set_fld_temp()
 !		if (nfld == 2) then
@@ -229,9 +245,9 @@ contains
 
 		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
 
-		dzeta(1) = dzeta(2)	!store old value
-		dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
-		sample_dzeta(1,:) = sample_dzeta(2,:)
+		!dzeta(1) = dzeta(2)	!store old value
+		!dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
+		!sample_dzeta(1,:) = sample_dzeta(2,:)
 
 		zf1(IRANGE) = 0._dl
 		zf2(IRANGE) = 0._dl
@@ -254,8 +270,10 @@ contains
 			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
 		enddo			
 		! Calculate dzeta
-		dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
-		dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		!dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
+		!dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
+		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
 
 		!do i=1,n_sample
 		!	sample_dzeta(2,i) = dzeta_lat(2,sample_site(i,1),sample_site(i,2),sample_site(i,3))
@@ -279,15 +297,15 @@ contains
 
 		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
 
-		dzeta(1) = dzeta(2)	!store old value
-		dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
+		!dzeta(1) = dzeta(2)	!store old value
+		!dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
 		!dzeta_lat_comp(1,:,IRANGE) = dzeta_lat_comp(2,:,IRANGE)
 		! Store old value of x_A*epsilon_A*dzeta_A/epsilon
-		do i=1,nfld
-			dzeta_part(1,2*i-1,IRANGE) = epsilon_part(i,IRANGE)*dzeta_part(2,2*i-1,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1))
-			dzeta_part(1,2*i,IRANGE) = epsilon_part(i,IRANGE)*dzeta_part(2,2*i,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1))
-		enddo
-		sample_dzeta(1,:) = sample_dzeta(2,:)
+		!do i=1,nfld
+		!	dzeta_part(1,2*i-1,IRANGE) = epsilon_part(i,IRANGE)*dzeta_part(2,2*i-1,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1))
+		!	dzeta_part(1,2*i,IRANGE) = epsilon_part(i,IRANGE)*dzeta_part(2,2*i,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1))
+		!enddo
+		!sample_dzeta(1,:) = sample_dzeta(2,:)
 
 		zf1(IRANGE) = 0._dl
 		zf2(IRANGE) = 0._dl
@@ -301,8 +319,10 @@ contains
 			
 			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1
 			epsilon_part(i,IRANGE) = 1.5_dl*(fldp(i,IRANGE)**2)/yscl**6
-			dzeta_part(2,2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
-			dzeta_part(2,2*i,IRANGE) = ggrad1
+			!dzeta_part(2,2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
+			!dzeta_part(2,2*i,IRANGE) = ggrad1
+			dzeta_part(2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
+			dzeta_part(2*i,IRANGE) = ggrad1
 		enddo
 		! Get denominator of dzeta
 		do i=1,nfld
@@ -312,17 +332,69 @@ contains
 			
 			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
 			epsilon_part(i,IRANGE) = epsilon_part(i,IRANGE) + 0.5_dl*(ggrad1)/yscl**2
-			dzeta_part(2,2*i-1,IRANGE) = yscl**2 *dzeta_part(2,2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
-			dzeta_part(2,2*i,IRANGE) = yscl**2 *dzeta_part(2,2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+			!dzeta_part(2,2*i-1,IRANGE) = yscl**2 *dzeta_part(2,2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+			!dzeta_part(2,2*i,IRANGE) = yscl**2 *dzeta_part(2,2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+			dzeta_part(2*i-1,IRANGE) = yscl**2 *dzeta_part(2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+			dzeta_part(2*i,IRANGE) = yscl**2 *dzeta_part(2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
 		enddo			
 		! Calculate dzeta
-		dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
-		dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		!dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
+		!dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
+		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
 
 		!do i=1,n_sample
 		!	sample_dzeta(2,i) = dzeta_lat(2,sample_site(i,1),sample_site(i,2),sample_site(i,3))
 		!enddo
 	end subroutine get_dzeta_part
+
+! Subroutine to calculate dzeta and the components of dzeta for kinetic, gradient and potential terms
+! n.b. watch the factors of yscl and to what factors they are applied
+	subroutine get_dzeta_part_kgv(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
+		integer, dimension(1:3), intent(in) :: nsize
+		real*8 :: dk	
+    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
+		type(C_PTR) :: planf, planb
+
+		integer :: n1, n2, n3
+		integer :: i,j
+
+		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
+
+		!zf1(IRANGE) = 0._dl
+		!zf2(IRANGE) = 0._dl
+		epsilon_part = 0.0_dl	!clear previous calculation
+		dzeta_part = 0.0_dl		!clear previous calculation
+		! Get numerator of dzeta
+		do i=1,nfld
+			zlap1 = fldp(i,IRANGE)
+			zlap2 = fld(i,IRANGE)
+			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+			zlap1 = fld(i,IRANGE)
+			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
+			
+			dzeta_part(1,IRANGE) = dzeta_part(1,IRANGE) + fldp(i,IRANGE)*(zlap1/yscl**4 - modeldv_test(i,fld(1,IRANGE),fld(2,IRANGE))/yscl**2)! K
+			dzeta_part(2,IRANGE) = dzeta_part(2,IRANGE) + ggrad1/yscl**4																																			! G
+			dzeta_part(3,IRANGE) = dzeta_part(3,IRANGE) + fldp(i,IRANGE)*zlap1/yscl**4																												! K+V
+			dzeta_part(4,IRANGE) = dzeta_part(2,IRANGE) + ggrad1/yscl**4 + fldp(i,IRANGE)*modeldv_test(i,fld(1,IRANGE),fld(2,IRANGE))/yscl**2	! G+V
+		enddo
+		! Get denominator of dzeta
+		do i=1,nfld
+			zlap1 = fld(i,IRANGE)
+			zlap2 = fld(i,IRANGE)
+			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+			epsilon_part(1,IRANGE) = epsilon_part(1,IRANGE) + fldp(i,IRANGE)**2/yscl**6				! K
+			epsilon_part(2,IRANGE) = epsilon_part(2,IRANGE) + ggrad1/(3._dl*yscl**2)					! G
+		enddo			
+		! Calculate dzeta
+		dzeta_lat(IRANGE) = (dzeta_part(2,IRANGE)+dzeta_part(3,IRANGE)) / (3._dl*sum(epsilon_part(:,IRANGE) ,dim=1))
+		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		dzeta_part(1,IRANGE) = dzeta_part(1,IRANGE)/(3._dl*epsilon_part(1,IRANGE))	! K
+		dzeta_part(2,IRANGE) = dzeta_part(2,IRANGE)/(3._dl*epsilon_part(2,IRANGE))	! G
+		dzeta_part(3,IRANGE) = dzeta_part(3,IRANGE)/(3._dl*epsilon_part(1,IRANGE))	! K+V
+		dzeta_part(4,IRANGE) = dzeta_part(4,IRANGE)/(3._dl*epsilon_part(2,IRANGE))	! G+V
+		
+	end subroutine get_dzeta_part_kgv
 
 ! Subroutine to get dzeta including the potential term that I missed in get_dzeta_part
 ! Also computes rho_A + P_A
@@ -351,8 +423,8 @@ contains
 			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
 			
 			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1										! Update this line to include potential term
-			dzeta_part(2,2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
-			dzeta_part(2,2*i,IRANGE) = ggrad1
+			dzeta_part(2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
+			dzeta_part(2*i,IRANGE) = ggrad1
 		enddo
 		
 		! Get epsilon_part
@@ -364,12 +436,12 @@ contains
 			
 			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
 			epsilon_part(i,IRANGE) = 1.5_dl*(fldp(i,IRANGE)**2)/yscl**6 + 0.5_dl*(ggrad1)/yscl**2
-			dzeta_part(2,2*i-1,IRANGE) = yscl**2 *dzeta_part(2,2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
-			dzeta_part(2,2*i,IRANGE) = yscl**2 *dzeta_part(2,2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+			dzeta_part(2*i-1,IRANGE) = yscl**2 *dzeta_part(2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+			dzeta_part(2*i,IRANGE) = yscl**2 *dzeta_part(2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
 		enddo			
 		! Calculate dzeta
-		dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
-		dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
+		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
 
 
 	end subroutine get_dzeta_part_pot
@@ -390,9 +462,9 @@ contains
 
 		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
 
-		dzeta(1) = dzeta(2)	!store old value
-		dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
-		sample_dzeta(1,:) = sample_dzeta(2,:)
+		!dzeta(1) = dzeta(2)	!store old value
+		!dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
+		!sample_dzeta(1,:) = sample_dzeta(2,:)
 
 		zf1(IRANGE) = 0._dl
 		zf2(IRANGE) = 0._dl
@@ -417,8 +489,10 @@ contains
 		call lat_smooth(zf1, Fk1, eps_smooth, planf, planb)
 		call lat_smooth(zf2, Fk1, eps_smooth, planf, planb)	
 		! Calculate dzeta
-		dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
-		dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		!dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
+		!dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
+		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
 
 		!do i=1,n_sample
 		!	sample_dzeta(2,i) = dzeta_lat(2,sample_site(i,1),sample_site(i,2),sample_site(i,3))
@@ -650,7 +724,7 @@ contains
 		zeta_moment3 = get_moment_3d(zeta_lat, zeta_moment1, 3, n_size)
 		zeta_moment4 = get_moment_3d(zeta_lat, zeta_moment1, 4, n_size)
 		!zeta_char = char_func(zeta_lat)
-		write(96,'(30(ES22.15,2x))') time, dzeta(1), dzeta(2), zeta, zeta_moment1, zeta_moment2, zeta_moment3, zeta_moment4!, zeta_char
+		write(96,'(30(ES22.15,2x))') time, dzeta, dzeta, zeta, zeta_moment1, zeta_moment2, zeta_moment3, zeta_moment4!, zeta_char
 		!write(96,*)
 	end subroutine write_zeta
 
@@ -679,12 +753,12 @@ contains
 
 		do i=1,nx; do j=1,ny
 #ifdef ONEFLD
-			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, epsilon_part(1,i,j,kslice), dzeta_part(2,1,i,j,kslice),&
-			dzeta_part(2,2,i,j,kslice), zeta_part(1,i,j,kslice), zeta_part(2,i,j,kslice)
+			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, epsilon_part(1,i,j,kslice), dzeta_part(1,i,j,kslice),&
+			dzeta_part(2,i,j,kslice), zeta_part(i,j,kslice), zeta_part(i,j,kslice)
 #elif TWOFLD2
-			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, epsilon_part(1,i,j,kslice), dzeta_part(2,1,i,j,kslice),&
-			dzeta_part(2,2,i,j,kslice), zeta_part(1,i,j,kslice), zeta_part(2,i,j,kslice), epsilon_part(2,i,j,kslice), dzeta_part(2,3,i,j,kslice),&
-			dzeta_part(2,4,i,j,kslice), zeta_part(3,i,j,kslice), zeta_part(4,i,j,kslice)!, zeta_part(1,i,j,kslice)+zeta_part(2,i,j,kslice)
+			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, epsilon_part(1,i,j,kslice), dzeta_part(1,i,j,kslice),&
+			dzeta_part(2,i,j,kslice), zeta_part(1,i,j,kslice), zeta_part(2,i,j,kslice), epsilon_part(2,i,j,kslice), dzeta_part(3,i,j,kslice),&
+			dzeta_part(4,i,j,kslice), zeta_part(3,i,j,kslice), zeta_part(4,i,j,kslice)!, zeta_part(1,i,j,kslice)+zeta_part(2,i,j,kslice)
 #endif
 		enddo; enddo
 		write(n_file,*)

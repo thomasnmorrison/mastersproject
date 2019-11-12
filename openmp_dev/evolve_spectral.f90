@@ -31,6 +31,7 @@
 ! to do: make a precompiler statement for choosing how rho is remormalized
 ! to do: make a precompiler for how fields are initialized
 ! to do: make spectrum output for zeta parts
+! to do: make spectrum outputs only as often as lattice slice outputs
 
 program lattice
 #include "macros.h"
@@ -50,11 +51,11 @@ program lattice
   implicit none
 ! Time Stepping Properties
   integer :: j, jj
-  integer, parameter :: nstep = 2**8 			! Determines total number of output steps
-  integer, parameter :: stepsize = 2**6		! Determines number of integration steps between outputing data
-	integer, parameter :: stepslice = 2**2	! Determines number of output steps between outputing a lattice slice
+  integer, parameter :: nstep = 2**9 			! Determines total number of output steps
+  integer, parameter :: stepsize = 2**5		! Determines number of integration steps between outputing data
+	integer, parameter :: stepslice = 2**3	! Determines number of output steps between outputing a lattice slice
 	integer, parameter :: zslice = nz/2 		! Determines which slice of the lattice is output
-  real(dl), parameter :: tstep0 = 1.2_dl/(2.0_dl**14)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
+  real(dl), parameter :: tstep0 = 0.8_dl/(2.0_dl**14)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
 	real(dl) :: tstep = tstep0 							! time step which is updated
 	real(dl) :: t_cur = 0.0 								! tracks the elapsed conformal time
 !  real(dl), parameter :: tstep = 0.05
@@ -109,19 +110,21 @@ program lattice
   call init_output()
 
 ! initialize fields	
-	!call slow_roll_cor_lat(H0)														! specific routine to provide an initial power spectrum
-	!call mink_cor_lat()																	! provides initial power spectrum for Minkowski space on lattice
-	!call hank_cor_lat_massless_test(H0)									! provides initial power spectrum for massless Hankel function solutions on lattice
-	!call mink_cor_lat_scale(1._dl, 0.1_dl)
 	call init_cor_rad_cosmic(4.0_dl, H0)										! provides initial power spectrum by integrating mode functions on oversampled, isotropic
 	! This loop is for testing field initialization, ordinarily only initialize fileds once
-	!call init_cor_rad_cosmic_z(1.0_dl, dphi0, H0)					! provides initial power spectrum for fields and zeta
+	!call init_cor_rad_cosmic_z(5.0_dl, dphi0, H0)					! provides initial power spectrum for fields and zeta
 	!call write_cor_lat()
 	do seed_in=1,1
 	print*, "nfld=", nfld
 	call zeta_init()																			! initialize zeta to 0 on the whole lattice
 	call init_fields_cor_rad(cor_rad, seed_in)						! initialize fields from oversampled, isotropic power spectrum
-	!call init_fields_cor_z_rad(cor_rad, z_amp_rad, z_shift_rad, seed_in)	!
+	!!! TESTING init_fields_cor_z_rad
+	!z_amp_rad(:) = 0.0_dl
+	!print*, "z_amp_rad=", z_amp_rad
+	!z_shift_rad(:) = 0.0_dl!0.25_dl*twopi 
+	!print*, "z_shift_rad=", z_shift_rad
+	!call init_fields_cor_z_rad(cor_rad, z_amp_rad, z_shift_rad, seed_in)
+
 	!call init_fields_cor2(cor_lat,seed_in)								! initializes fields to match a supplied power spectrum on lattice
 	!call init_fields_cor_conv_test(cor_lat, seed_in)			! initialization for convergence test
 		!call init_fields_ind(seed_in)	! initialize fields indepentently
@@ -148,7 +151,8 @@ program lattice
   call cpu_time(tr1); call system_clock(ti1)
 	!initialize dzeta
 	!call get_dzeta([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)					! call for unsmoothed zeta
-	call get_dzeta_part([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)			! call for unsmoothed zeta by components
+	!call get_dzeta_part([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)			! call for unsmoothed zeta split by fileds
+	call get_dzeta_part_kgv([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)	! call for unsmoothed zeta split by K, G, K+V, G+V
 	!call get_dzeta_smooth([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)	! call for smoothed zeta
 
 	t_cur = 0.0_dl
@@ -159,7 +163,8 @@ program lattice
 		 call symp8(tstep, stepsize)
      !step zeta
 			!if (yscl>2._dl) then	! start zeta integration late
-		 call zeta_step(stepsize*tstep, [nx,ny,nz], dk, Fk, Fk2, Fk3, planf, planb)
+		 !call zeta_step(stepsize*tstep, [nx,ny,nz], dk, Fk, Fk2, Fk3, planf, planb)
+		 call zeta_step_kgv(stepsize*tstep, [nx,ny,nz], dk, Fk, Fk2, Fk3, planf, planb)		! Step zeta integration with K, G, K+V, G+V parts
 			!endif
 		 !adapt step size
 		 t_cur = t_cur + stepsize*tstep
@@ -715,7 +720,7 @@ program lattice
 			endif
 			!if (step==nstep .or. step==80) then
 			if (step==nstep) then
-				call write_lat(time)
+				!call write_lat(time)
 			endif
 ! if the WINT is not defined call lat_dump to output the lattice to a binary file 
 !#ifndef WINT
@@ -766,7 +771,7 @@ program lattice
 			laplace(IRANGE) = zeta_lat(IRANGE)
 			call spectrum_3d(spec(:,1), laplace, Fk, planf)
 			Fk2=Fk
-			laplace(IRANGE) = dzeta_lat(2,IRANGE)
+			laplace(IRANGE) = dzeta_lat(IRANGE)	!laplace(IRANGE) = dzeta_lat(2,IRANGE)
 			call spectrum_3d(spec(:,2), laplace, Fk, planf)
 			call crossspec_3d(Fk, Fk2, spec(:,3), spec(:,4))
 ! field spec output
@@ -854,7 +859,7 @@ program lattice
 				do j=1,2
 					laplace(IRANGE) = zeta_part(2*(i-1)+j,IRANGE)
 					call spectrum_3d(spec(:,5*(i-1)+j), laplace, Fk, planf)
-					laplace(IRANGE) = dzeta_part(2,2*(i-1)+j,IRANGE)
+					laplace(IRANGE) = dzeta_part(2*(i-1)+j,IRANGE)	!dzeta_part(2,2*(i-1)+j,IRANGE)
 					call spectrum_3d(spec(:,5*(i-1)+j+2), laplace, Fk, planf)
 				enddo
 				laplace(IRANGE) = epsilon_part(i,IRANGE)
@@ -914,7 +919,7 @@ program lattice
 		enddo
 		! write zeta and dzeta/dtau to a file for whole lattice
 		write(92) zeta_lat(IRANGE)
-		write(92) dzeta_lat(2,IRANGE) ! the index 2 is because dzeta_lat(1,IRANGE) hold dzeta_lat from the previous time step
+		write(92) dzeta_lat(IRANGE)	!dzeta_lat(2,IRANGE) ! the index 2 is because dzeta_lat(1,IRANGE) hold dzeta_lat from the previous time step
 	end subroutine lat_dump
 
 	! Read in lattice from previous run and store value in some arrays
@@ -943,9 +948,9 @@ program lattice
 		do i=1,nx; do j=1,ny
 #ifdef ONEFLD
 			!write(90,'(30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
-			write(90,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
+			write(90,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
 #elif TWOFLD2
-			write(90,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice), fld(2,i,j,kslice), fldp(2,i,j,kslice)
+			write(90,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice), fld(2,i,j,kslice), fldp(2,i,j,kslice)
 #endif
 		enddo; enddo
 		write(90,*)
@@ -959,9 +964,9 @@ program lattice
 		do i=1,nx; do j=1,ny; do k=1,nz
 #ifdef ONEFLD
 			!write(90,'(30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
-			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, k, zeta_lat(i,j,k), dzeta_lat(2,i,j,k), fld(1,i,j,k), fldp(1,i,j,k)
+			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, k, zeta_lat(i,j,k), dzeta_lat(i,j,k), fld(1,i,j,k), fldp(1,i,j,k)
 #elif TWOFLD2
-			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, zeta_lat(i,j,k), dzeta_lat(2,i,j,k), zeta_part(1,i,j,k), zeta_part(2,i,j,k),fld(1,i,j,k), fldp(1,i,j,k), fld(2,i,j,k), fldp(2,i,j,k)
+			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, zeta_lat(i,j,k), dzeta_lat(i,j,k), zeta_part(1,i,j,k), zeta_part(2,i,j,k),fld(1,i,j,k), fldp(1,i,j,k), fld(2,i,j,k), fldp(2,i,j,k)
 #endif
 		enddo; enddo; enddo
 		write(89,*)		
@@ -1440,36 +1445,37 @@ program lattice
 				print*
 			endif
 			! Initialize GRV vector
-			call random_number(a); call random_number(p)	! a and p are dimension 2*nfld
+			call random_number(a); call random_number(p)	! a and p are dimension 2*nfld							
 			if (i==1 .and. j==1 .and. k==1) then
 				grv(:) = (0._dl,0._dl)
-			! This is because the reality condition is used to compress the FT along the k_x axis (by fftw3 convention)
-			! so F(ii,jj,kk) = F(-ii,jj,kk)*, for ii = 0, this means F(ii=0,jj,kk) = F(-ii=0,jj,kk) = F(ii=0,jj,kk)*
-			! so F(ii=0,jj,kk) is real
 			elseif (i==1 .or. i==nnx) then
 				grv(:) = (1._dl,0._dl)*sign(sqrt(-1._dl*log(a)),p-0.5_dl)!(1._dl,0._dl)*sign(sqrt(-2._dl*log(a)),p-0.5_dl)
 			else
-				grv(:) = sqrt(-0.5_dl*log(a)) * exp(w*p)!sqrt(-1._dl*log(a)) * exp(w*p)
+				grv(:) =	sqrt(-1._dl*log(a)) * exp(w*p) !sqrt(-0.5_dl*log(a)) * exp(w*p)!
 			endif
 			! Set Fourier transform of zeta
 			!print*, "a,p = ", a, p
 			!print*, "grv(:) = ", grv(:)
-			print*, "grv(1) = ", grv(1)
+			!print*, "grv(1) = ", grv(1)
 			!print*, "z_amp = ", z_amp
-			z_amp = z_amp * abs(grv(1))																															! find amplitude of zeta mode
+			! move z_amp = line to after modes are multipled by matrix
+			!z_amp = z_amp * abs(grv(1))																															! find amplitude of zeta mode
 			!print*, "z_amp = ", z_amp	
 			!print*, "abs(grv(1)) = ", abs(grv(1))	
 			!print*, "AIMAG(grv(1)) = ", AIMAG(grv(1))	
 			!print*, "REAL(grv(1)) = ", REAL(grv(1))					
-			print*, "atan2(AIMAG(grv(1)), REAL(grv(1)))", atan2(AIMAG(grv(1)), REAL(grv(1)))
-			z_phase = z_phase - atan2(AIMAG(grv(1)), REAL(grv(1)))					! find phase of zeta mode
-			Fk(LATIND) = z_amp * exp((0._dl,-1._dl)*z_phase) / nvol
+			!print*, "atan2(AIMAG(grv(1)), REAL(grv(1)))", atan2(AIMAG(grv(1)), REAL(grv(1)))
+			!z_phase = z_phase - atan2(AIMAG(grv(1)), REAL(grv(1)))					! find phase of zeta mode
+			!Fk(LATIND) = z_amp * exp((0._dl,-1._dl)*z_phase) / nvol
 			do m = 1,2*nfld; do n = 1,2*nfld	! can do this with a where statement
 				if (n<m) then
 					cor_fac(n,m) = (0._dl,0._dl)
 				endif
 			enddo; enddo
 			call ztrmv('L','N','N', 2*nfld, cor_fac, 2*nfld, grv,  1)	! multiply random vector by transposed lower triangular factor of matrix
+			z_amp = z_amp * abs(grv(1))
+			z_phase = z_phase - atan2(AIMAG(grv(1)), REAL(grv(1)))					! find phase of zeta mode
+			Fk(LATIND) = z_amp * exp((0._dl,-1._dl)*z_phase) / nvol
 			! Set Fourier transform of fields
 			!Fk_cor(:,LATIND) = grv(:)/nvol*exp(-0.5*dble(ii**2+jj**2+kk**2)*dk**2/(kcut_h**2))	! fitering at horizon
 			Fk_cor(:,LATIND) = grv(:)/nvol	! no filtering at horizon
@@ -1484,7 +1490,7 @@ program lattice
 		! Add fluctuations to homogeneous fields
 		call fftw_execute_dft_c2r(planb, Fk, laplace)
 		zeta_lat(IRANGE) = laplace(IRANGE)
-		print*, zeta_lat
+		!print*, zeta_lat
 		do m=1, nfld
 			Fk(:,:,:) = Fk_cor(2*m-1,:,:,:)
 			call fftw_execute_dft_c2r(planb, Fk, laplace)!!!!! fft to real space
