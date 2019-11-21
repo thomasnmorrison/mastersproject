@@ -153,7 +153,7 @@ contains
 		endif
 	end function background_dV_1fld
 
-	! Function to calculate the interaction potential
+	! Function to calculate the interaction potential (includes V(chi))
 	elemental function Delta_V(f1,f2)
     real(dl) :: Delta_V
     real(dl), intent(in) :: f1,f2
@@ -177,6 +177,25 @@ contains
   end function Delta_V
 
 	! Function to calculate the derivatives of the interaction potential
+	! to do: extend this function to other potential options
+	elemental function dV_int(f1, f2, ind)
+		real(dl) :: dV_int
+    real(dl), intent(in) :: f1,f2
+		integer, intent(in) :: ind
+
+		if (ind==1) then
+			if (potential_option==6) then
+				dV_int = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
+			endif
+		elseif (ind==2) then
+			if (potential_option==6) then
+				dV_int = (-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - 0.25_dl*g2**2/(m2_inf-m2_p)*(f1-phi_p)**4) * f2
+			endif
+		endif
+
+	end function dV_int
+
+	! Function to calculate the derivatives of the interaction potential (includes V(chi))
 	elemental function Delta_dV(f1,f2,ind)
     real(dl) :: Delta_dV
     real(dl), intent(in) :: f1,f2

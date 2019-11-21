@@ -14,10 +14,8 @@
 ! to do: calculate linear/non-linear parts of zeta splits								- done
 ! to do: output linear/non-linear parts of zeta splits									- done
 
-
-! to do: once zeta integrator is changed to first order change dzeta declaration to not store old value
 ! to do: dzeta_lat is a redundant variable with dzeta_part, so at some point can be cleared our
-! to do: compile and debug
+! to do: I think zf1 znd zf2 are redundant, check if they can be removed
 
 module zeta_mod
 
@@ -34,10 +32,12 @@ module zeta_mod
 	!real(dl), dimension(2) :: dzeta = (/0.0_dl,0.0_dl/)
 	real(dl) :: dzeta = 0.0_dl															!	dzeta/dtau lattice average
 	real(dl), dimension(IRANGE) :: zeta_lat									! zeta on the lattice
+	real(dl), dimension(IRANGE) :: zeta_smooth							! zeta smoothed on the lattice
 	!real(dl), dimension(2,IRANGE) :: dzeta_lat 						!	dzeta/dtau
 	real(dl), dimension(IRANGE) :: dzeta_lat 								!	dzeta/dtau for first order integrator
+	real(dl), dimension(IRANGE) :: dzeta_smooth							! dzeta/dtau smoothed on the lattice
 	!real(dl), dimension(2,IRANGE) :: dzeta_lat_temp				! 1st component is numerator of dzeta, 2nd component is denominator of dzeta
-	real(dl), dimension(nfld,IRANGE) :: epsilon_part				! components rho*x_A*epsilon_A, slpit as kinetic, gradient
+	real(dl), dimension(2,IRANGE) :: epsilon_part						! components rho*x_A*epsilon_A, slpit as kinetic, gradient
 	!real(dl), dimension(2*nfld,IRANGE) :: zeta_part				! zeta component calculated from individual fields (and linear/non-linear)
 	!real(dl), dimension(2,2*nfld,IRANGE) :: dzeta_part			! dzeta/dtau component calculated from individual fields
 	real(dl), dimension(4,IRANGE) :: zeta_part							! zeta component calculated from K+V, G, K, G+V
@@ -66,9 +66,13 @@ contains
 		dzeta = 0.0_dl	!dzeta(:) = 0.0_dl
 		zeta_lat(IRANGE) = 0.0_dl
 		dzeta_lat(IRANGE) = 0.0_dl	!dzeta_lat(:,IRANGE) = 0.0_dl
+		zeta_part(:,IRANGE) = 0.0_dl
+		dzeta_part(:,IRANGE) = 0.0_dl
+		zeta_smooth(IRANGE) = 0.0_dl
+		dzeta_smooth(IRANGE) = 0.0_dl
 	end subroutine zeta_init
 
-	!!!! Step zeta integration using trapazoid rule
+	! Subroutine to step zeta total
 	subroutine zeta_step(dt, nsize, dk, Fk1, Fk2, Fk3, planf, planb)
 		real(dl) :: dt
 		integer, dimension(1:3), intent(in) :: nsize
@@ -97,7 +101,7 @@ contains
 		enddo
 	end subroutine zeta_step
 
-	! Subroutine to step zeta intgration using Euler method with K, G, K+V, G+V split
+	! Subroutine to step zeta intgration using Euler method with K, G, K+V, G+V split (also steps zeta total)
 	! n.b. this subroutine uses a only one value of dzeta
 	! n.b. this subroutine integrates zeta_part without weighting
 	subroutine zeta_step_kgv(dt, nsize, dk, Fk1, Fk2, Fk3, planf, planb)
@@ -118,35 +122,44 @@ contains
 		zeta_part(4,IRANGE) = zeta_part(4,IRANGE) + dzeta_part(4,IRANGE)*dt	! G+V unweighted
 	end subroutine zeta_step_kgv
 
-!	subroutine set_fld_temp()
-!		if (nfld == 2) then
-!			zf1 = fld(1,IRANGE)
-!			zf2 = fld(2,IRANGE)
-!			zfp1 = fldp(1,IRANGE)
-!			zfp2 = fldp(2,IRANGE)
-!		elseif (nfld ==1) then
-!			zf1 = fld(1,IRANGE)
-!			zf2 = 0.0_dl*fld(1,IRANGE)
-			!zf2 = fld(1,IRANGE)!THIS IS WRONG ONLY FOR TESTING
-!			zfp1 = fldp(1,IRANGE)
-!			zfp2 = 0.0_dl*fldp(1,IRANGE)
-			!zfp2 = fldp(1,IRANGE)!THIS IS WRONG ONLY FOR TESTING
-!		endif
-!	end subroutine set_fld_temp
+	! Subroutine to step zeta integration with K+V, G split both unsmoothed and smoothed
+	! to do: allow for different smoothings, ie T_{i0}, fields, dzeta
+	subroutine zeta_step_kgv_smooth(dt, nsize, dk, r_smooth, Fk1, Fk2, Fk3, planf, planb)
+		real(dl) :: dt				! time step
+		integer, dimension(1:3), intent(in) :: nsize
+		real*8 :: dk					! fundemental wavenumber
+		real(dl) :: r_smooth	! Smoothing scale in hubbles
+		!integer :: ind				! index to select smoothing type
+    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
+		type(C_PTR) :: planf, planb
 
-	! subroutint to set temp fields in get_dzeta_test
-!#ifdef GHOST
-!	subroutine set_fld_temp_test(ind)
-!		integer :: ind
-		
-!		if (ind <= nfld) then
-!			zf1 = fld(ind,IRANGE)
-!			zfp1 = fldp(ind,IRANGE)
-!		elseif (ind > nfld) then
-!			zf1 = ghst(ind-nfld,IRANGE)
-!			zfp1 = ghstp(ind-nfld,IRANGE)
-!	end subroutine set_fld_temp_test
-!#endif
+		!if (ind==1) then
+			call get_dzeta_part_kgv_smooth(nsize, dk, r_smooth, Fk1, Fk2, Fk3, planf, planb)	
+		!endif
+
+		zeta = zeta + dzeta*dt																							! step volume average zeta
+		zeta_lat(IRANGE) = zeta_lat(IRANGE) + dzeta_lat(IRANGE)*dt					! step zeta on the lattice
+		zeta_smooth(IRANGE) = zeta_smooth(IRANGE) + dzeta_smooth(IRANGE)*dt	! step smoothed zeta
+		zeta_part(:,IRANGE) = zeta_part(:,IRANGE) + dzeta_part(:,IRANGE)*dt	! step partial zeta
+	end subroutine zeta_step_kgv_smooth
+
+	! Subroutine to step zeta with fileds split and interaction potential equally shared (also steps zeta total)
+	subroutine zeta_step_fld_vint(dt, nsize, dk, Fk1, Fk2, Fk3, planf, planb)
+		real(dl) :: dt
+		integer, dimension(1:3), intent(in) :: nsize
+		integer :: i
+		real*8 :: dk	
+    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
+		type(C_PTR) :: planf, planb
+
+		call get_dzeta_part_fld_vint(nsize, dk, Fk1, Fk2, Fk3, planf, planb)		! call for dzeta calc with K, G, V components
+
+		zeta = zeta + dzeta*dt
+		zeta_lat(IRANGE) = zeta_lat(IRANGE) + dzeta_lat(IRANGE)*dt
+		do i=1,nfld
+			zeta_part(i,IRANGE) = zeta_part(i,IRANGE) + dzeta_part(i,IRANGE)*dt
+		enddo
+	end subroutine zeta_step_fld_vint
 
 	!!!! Updates new value of dzeta into dzeta(2), stores old value of dzeta into dzeta(1)
 !	subroutine get_dzeta(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
@@ -232,9 +245,8 @@ contains
 !	end subroutine get_dzeta
 
 ! subroutine to get dzeta for an arbitrary number of fields
-! to do: Allow for smoothing of numerator and denominator
-! to do: 
-	subroutine get_dzeta_test(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
+! n.b. I haven't tested this subroutine
+	subroutine get_dzeta(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
 		integer, dimension(1:3), intent(in) :: nsize
 		real*8 :: dk	
     complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
@@ -245,12 +257,7 @@ contains
 
 		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
 
-		!dzeta(1) = dzeta(2)	!store old value
-		!dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
-		!sample_dzeta(1,:) = sample_dzeta(2,:)
-
-		zf1(IRANGE) = 0._dl
-		zf2(IRANGE) = 0._dl
+		dzeta_lat(IRANGE) = 0._dl
 		! Get numerator of dzeta
 		do i=1,nfld
 			zlap1 = fldp(i,IRANGE)
@@ -259,7 +266,7 @@ contains
 			zlap1 = fld(i,IRANGE)
 			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
 
-			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1
+			dzeta_lat = dzeta_lat + ggrad1/yscl**4 + fldp(i,IRANGE)*zlap1/yscl**4
 		enddo
 		! Get denominator of dzeta
 		do i=1,nfld
@@ -267,19 +274,13 @@ contains
 			zlap2 = fld(i,IRANGE)
 			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
 			
-			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
+			epsilon_part(i,IRANGE) = fldp(i,IRANGE)**2/yscl**6 + ggrad1/(3._dl*yscl**2)
 		enddo			
 		! Calculate dzeta
-		!dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
-		!dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
-		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
+		dzeta_lat(IRANGE) = dzeta_lat(IRANGE)/(3._dl*sum(epsilon_part(:,IRANGE), dim=1))
 		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
 
-		!do i=1,n_sample
-		!	sample_dzeta(2,i) = dzeta_lat(2,sample_site(i,1),sample_site(i,2),sample_site(i,3))
-		!enddo
-
-	end subroutine get_dzeta_test
+	end subroutine get_dzeta
 
 ! Subroutine to calculate dzeta and the components of dzeta for individual species
 ! Does not include smoothing
@@ -361,8 +362,6 @@ contains
 
 		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
 
-		!zf1(IRANGE) = 0._dl
-		!zf2(IRANGE) = 0._dl
 		epsilon_part = 0.0_dl	!clear previous calculation
 		dzeta_part = 0.0_dl		!clear previous calculation
 		! Get numerator of dzeta
@@ -396,13 +395,69 @@ contains
 		
 	end subroutine get_dzeta_part_kgv
 
-! Subroutine to get dzeta including the potential term that I missed in get_dzeta_part
-! Also computes rho_A + P_A
-! n.b. This should make redundant the variable dzeta_lat in terms of rho_epsilon and dzeta_part
-! n.b. Can make this a first order integrator and adjust stepsize if necessary
-! n.b. I think the zf2 calculation is redundant, no it calcs a different graddotgrad
-! n.b. the zf1 variable is redundant, just use dzeta_part
-	subroutine get_dzeta_part_pot(nsize, dk, planf, planb)
+	! Subroutine to calculate dzeta and the components of dzeta for kinetic+potential, and gradient terms
+	! for lattice average, per lattice site, and smoothed drho and rho+P on hubble scales
+	subroutine get_dzeta_part_kgv_smooth(nsize, dk, r_smooth, Fk1, Fk2, Fk3, planf, planb)
+		integer, dimension(1:3), intent(in) :: nsize
+		real*8 :: dk
+		real(dl) :: r_smooth
+    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
+		type(C_PTR) :: planf, planb
+
+		integer :: n1, n2, n3
+		integer :: i,j
+
+		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
+
+		epsilon_part = 0.0_dl	!clear previous calculation
+		dzeta_part = 0.0_dl		!clear previous calculation
+		! Get numerator of dzeta
+		do i=1,nfld
+			zlap1 = fldp(i,IRANGE)
+			zlap2 = fld(i,IRANGE)
+			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+			zlap1 = fld(i,IRANGE)
+			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)			
+			dzeta_part(1,IRANGE) = dzeta_part(1,IRANGE) + fldp(i,IRANGE)*zlap1/yscl**4	! K+V
+			dzeta_part(2,IRANGE) = dzeta_part(2,IRANGE) + ggrad1/yscl**4								! G
+		enddo
+		! Get denominator of dzeta
+		do i=1,nfld
+			zlap1 = fld(i,IRANGE)
+			zlap2 = fld(i,IRANGE)
+			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+			epsilon_part(1,IRANGE) = epsilon_part(1,IRANGE) + fldp(i,IRANGE)**2/yscl**6	! K+V
+			epsilon_part(2,IRANGE) = epsilon_part(2,IRANGE) + ggrad1/(3._dl*yscl**2)		! G
+		enddo			
+		! Calculate unsmoothed dzeta
+		dzeta_lat(IRANGE) = (dzeta_part(1,IRANGE)+dzeta_part(2,IRANGE)) / (3._dl*sum(epsilon_part(:,IRANGE) ,dim=1))	! total
+		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
+
+		! Calculate smoothed dzeta
+		zlap1 = dzeta_part(1,IRANGE)
+		zlap2 = dzeta_part(2,IRANGE)
+		call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator
+		call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator
+		dzeta_part(3,IRANGE) = zlap1(IRANGE)															! smoothed K+V numerator
+		dzeta_part(4,IRANGE) = zlap2(IRANGE)															! smoothed G numerator
+		dzeta_smooth(IRANGE) = zlap1(IRANGE) + zlap2(IRANGE)							! smoothed total numerator
+		zlap1 = epsilon_part(1,IRANGE)
+		zlap2 = epsilon_part(2,IRANGE)
+		call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator
+		call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator
+		dzeta_part(3,IRANGE) = dzeta_part(3,IRANGE)/(3._dl*zlap1(IRANGE))	! smoothed K+V
+		dzeta_part(4,IRANGE) = dzeta_part(4,IRANGE)/(3._dl*zlap2(IRANGE))	! smoothed G
+		dzeta_smooth(IRANGE) = dzeta_smooth(IRANGE)/(3._dl*(zlap1(IRANGE)+zlap2(IRANGE)))	! smoothed total
+
+		! Calculate dzeta parts
+		dzeta_part(1,IRANGE) = dzeta_part(1,IRANGE)/(3._dl*epsilon_part(1,IRANGE))		! K+V
+		dzeta_part(2,IRANGE) = dzeta_part(2,IRANGE)/(3._dl*epsilon_part(2,IRANGE))		! G
+
+	end subroutine get_dzeta_part_kgv_smooth
+
+! Subroutine to get dzeta from rho split into phi and chi parts with the interaction potential split half and half
+! Also computes rho_A + P_A and dzeta_tot
+	subroutine get_dzeta_part_fld_vint(nsize, dk, Fk1, Fk2, Fk3,planf, planb)
 		integer, dimension(1:3), intent(in) :: nsize
 		real*8 :: dk	
     complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
@@ -414,7 +469,6 @@ contains
 		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
 
 		! Get numerator of dzeta
-		zf1(IRANGE) = 0._dl
 		do i=1,nfld
 			zlap1 = fldp(i,IRANGE)
 			zlap2 = fld(i,IRANGE)
@@ -422,29 +476,28 @@ contains
 			zlap1 = fld(i,IRANGE)
 			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
 			
-			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1										! Update this line to include potential term
-			dzeta_part(2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
-			dzeta_part(2*i,IRANGE) = ggrad1
+			dzeta_part(i,IRANGE) = fldp(i,IRANGE)*zlap1/yscl**4 + ggrad1/yscl**4 
+			dzeta_part(i,IRANGE) = dzeta_part(i,IRANGE) &
++ 0.5_dl*(fldp(1,IRANGE)*(-1._dl)**i*dV_int(fld(1,IRANGE),fld(2,IRANGE),1) + fldp(2,IRANGE)*(-1._dl)**(i+1)*dV_int(fld(1,IRANGE),fld(2,IRANGE),2))/yscl**2
 		enddo
 		
 		! Get epsilon_part
-		zf2(IRANGE) = 0._dl
 		do i=1,nfld
 			zlap1 = fld(i,IRANGE)
 			zlap2 = fld(i,IRANGE)
 			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
-			
-			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
-			epsilon_part(i,IRANGE) = 1.5_dl*(fldp(i,IRANGE)**2)/yscl**6 + 0.5_dl*(ggrad1)/yscl**2
-			dzeta_part(2*i-1,IRANGE) = yscl**2 *dzeta_part(2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
-			dzeta_part(2*i,IRANGE) = yscl**2 *dzeta_part(2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+
+			epsilon_part(i,IRANGE) = fldp(i,IRANGE)**2/yscl**6 + ggrad1/(3._dl*yscl**2)
 		enddo			
+
 		! Calculate dzeta
-		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
+		dzeta_lat(IRANGE) = sum(dzeta_part(:,IRANGE), dim=1)/(3._dl*sum(epsilon_part(:,IRANGE), dim=1))
 		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
+		do i=1, nfld
+			dzeta_part(i,IRANGE) = dzeta_part(i,IRANGE)/(3._dl*epsilon_part(i,IRANGE))
+		enddo
 
-
-	end subroutine get_dzeta_part_pot
+	end subroutine get_dzeta_part_fld_vint
 
 ! Subroutine to calculate dzeta using a smoothed stress energy tensor
 ! to do: use lat_smooth to smooth stress energy tensor
@@ -486,55 +539,44 @@ contains
 			
 			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
 		enddo
-		call lat_smooth(zf1, Fk1, eps_smooth, planf, planb)
-		call lat_smooth(zf2, Fk1, eps_smooth, planf, planb)	
+		call gauss_smooth_hub(zf1, Fk1, eps_smooth, planf, planb)
+		call gauss_smooth_hub(zf2, Fk1, eps_smooth, planf, planb)	
 		! Calculate dzeta
 		!dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
 		!dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
 		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
 		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
 
-		!do i=1,n_sample
-		!	sample_dzeta(2,i) = dzeta_lat(2,sample_site(i,1),sample_site(i,2),sample_site(i,3))
-		!enddo
-
 	end subroutine get_dzeta_smooth
 
-! Subroutine that takes in a field as calculated on the lattice and smoothing on some physical scale
-! to do: Check Fourier convention on kernal
-! to do: Check sig_s for 3 dimensions
-	subroutine lat_smooth(f1, Fk1, eps, planf, planb)
+	! Subroutine that takes in a field as calculated on the lattice and smoothing on some physical scale
+	subroutine gauss_smooth_hub(f1, Fk1, r_smooth, planf, planb)
 		real(C_DOUBLE), pointer :: f1(:,:,:)								! Field to be smoothed
 		complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:)		! Pointer for FFT of field to be smoothed
-		real(dl) :: eps																			! number times comoving hubble scale on which to smooth
+		real(dl) :: r_smooth																! number times comoving hubble scale on which to smooth
 		real(dl) :: sig_s																		! Smoothing scale (comoving size)
 		real(dl) :: ker																			! Gaussian kernal for smoothing
 		integer :: i,j,k,ii,jj,kk														! lattice labels and wave numbers
 		real(dl) :: rad2																		! radius squared in Fourier space
 		type(C_PTR) :: planf, planb													! FFTW forward and backward plans
 
-		! compute sig_s
-		sig_s = -eps/(ysclp / 6. / yscl)
-
-		! compute forward FFT
-		call fftw_execute_dft_r2c(planf, f1, Fk1)
+		call fftw_execute_dft_r2c(planf, f1, Fk1)						! compute forward FFT
+		sig_s = -r_smooth/(ysclp / 6._dl / yscl)/3._dl			! compute sig_s = r_smooth/(aH), division by 3 is for 3 dimensions
 
 		! Loop over lattice, multiply FFT by kernal
 		do k=1,nz; if(k>nnz) then; kk = k-nz-1; else; kk=k-1; endif
 			do j=1,ny; if(j>nny) then; jj = j-ny-1; else; jj=j-1; endif
 				do i=1,nnx
-					! compute kernal
 					rad2 = (ii**2 + jj**2 + kk**2)*dk**2
-					ker = exp(-0.5*rad2*sig_s**2)
-					Fk1(LATIND) = Fk1(LATIND)*ker
+					ker = exp(-0.5*rad2*sig_s**2)/(len)**3				! compute kernal, nvol factor cancelled with inverse transform
+					Fk1(LATIND) = Fk1(LATIND)*ker									! convolve and make complex
 				enddo
 			enddo
 		enddo
-		! compute backward FFT and normalize
-		call fftw_execute_dft_c2r(planb, Fk1, f1)
+		call fftw_execute_dft_c2r(planb, Fk1, f1)			! compute backward FFT, normalization for kernal already done in kernal calculation
 		f1 = f1/nvol
 
-	end subroutine lat_smooth
+	end subroutine gauss_smooth_hub
 
 ! calculates grad(f1).grad(f2) and outputs in gg (f1 and f2 are also overwritten)
 ! check if I can do this by updating a partial sum
@@ -712,10 +754,14 @@ contains
 !	end function char_func
 
 !!! Add characteristic function to output
-	subroutine write_zeta(time)
+	! to do: use arrays and loops like a decent human being
+	! n.b. I've updated the formating of the output
+	subroutine write_zeta(time, n_file)
 		real(dl) :: time
 		real(dl) :: zeta_moment1, zeta_moment2, zeta_moment3, zeta_moment4!, zeta_char
+		real(dl) :: zeta_s_moment1, zeta_s_moment2, zeta_s_moment3, zeta_s_moment4	! moments of smoothed zeta
 		integer, dimension(1:3) :: n_size = (/nx,ny,nz/)
+		integer :: n_file		! file number
 
 		!n_size(1) = nx; n_size(2) = ny; n_size(3) = nz
 		
@@ -723,8 +769,12 @@ contains
 		zeta_moment2 = get_moment_3d(zeta_lat, zeta_moment1, 2, n_size)
 		zeta_moment3 = get_moment_3d(zeta_lat, zeta_moment1, 3, n_size)
 		zeta_moment4 = get_moment_3d(zeta_lat, zeta_moment1, 4, n_size)
+		zeta_s_moment1 = get_mean_3d(zeta_smooth, n_size)
+		zeta_s_moment2 = get_moment_3d(zeta_smooth, zeta_s_moment1, 2, n_size)
+		zeta_s_moment3 = get_moment_3d(zeta_smooth, zeta_s_moment1, 3, n_size)
+		zeta_s_moment4 = get_moment_3d(zeta_smooth, zeta_s_moment1, 4, n_size)
 		!zeta_char = char_func(zeta_lat)
-		write(96,'(30(ES22.15,2x))') time, dzeta, dzeta, zeta, zeta_moment1, zeta_moment2, zeta_moment3, zeta_moment4!, zeta_char
+		write(n_file,'(30(ES22.15,2x))') time, dzeta, zeta, zeta_moment1, zeta_moment2, zeta_moment3, zeta_moment4, zeta_s_moment1, zeta_s_moment2, zeta_s_moment3, zeta_s_moment4!, zeta_char
 		!write(96,*)
 	end subroutine write_zeta
 
@@ -744,7 +794,6 @@ contains
 	end subroutine write_moments
 
 ! Subroutine to output variables dealing with partial zetas on a slice of the lattice
-! to do: call this subroutine from evolve_spectral.f90
 	subroutine write_zeta_partial(time, kslice, n_file)
 		real(dl), intent(in) :: time	! conformal time of output
 		integer :: kslice							! the z index of the slice to be output
@@ -754,7 +803,8 @@ contains
 		do i=1,nx; do j=1,ny
 #ifdef ONEFLD
 			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, epsilon_part(1,i,j,kslice), dzeta_part(1,i,j,kslice),&
-			dzeta_part(2,i,j,kslice), zeta_part(i,j,kslice), zeta_part(i,j,kslice)
+			dzeta_part(2,i,j,kslice), zeta_part(1,i,j,kslice), zeta_part(2,i,j,kslice), epsilon_part(2,i,j,kslice), dzeta_part(3,i,j,kslice),&
+			dzeta_part(4,i,j,kslice), zeta_part(3,i,j,kslice), zeta_part(4,i,j,kslice)
 #elif TWOFLD2
 			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, epsilon_part(1,i,j,kslice), dzeta_part(1,i,j,kslice),&
 			dzeta_part(2,i,j,kslice), zeta_part(1,i,j,kslice), zeta_part(2,i,j,kslice), epsilon_part(2,i,j,kslice), dzeta_part(3,i,j,kslice),&
