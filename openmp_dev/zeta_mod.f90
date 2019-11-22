@@ -87,7 +87,7 @@ contains
 
 		!call get_dzeta_test(nsize, dk, Fk1, Fk2, Fk3, planf, planb)			! call for dzeta calc no smoothing
 		!call get_dzeta_smooth(nsize, dk, Fk1, Fk2, Fk3, planf, planb)		! call for dzeta calc from smoothed T
-		call get_dzeta_part(nsize, dk, Fk1, Fk2, Fk3, planf, planb)				! call for dzeta calc with components
+		!call get_dzeta_part(nsize, dk, Fk1, Fk2, Fk3, planf, planb)				! call for dzeta calc with components
 		zeta = zeta + dzeta*dt	!zeta = zeta + 0.5_dl*sum(dzeta)*dt
 		!sample_zeta(:) = sample_zeta(:) + 0.5_dl*(sample_dzeta(1,:)+sample_dzeta(2,:))*dt
 		!sample_zeta_f(:,:) = sample_zeta_f(:,:) + 0.5_dl*(sample_dzeta_f(1,:,:)+sample_dzeta_f(2,:,:))*dt
@@ -401,6 +401,7 @@ contains
 
 	! Subroutine to calculate dzeta and the components of dzeta for kinetic+potential, and gradient terms
 	! for lattice average, per lattice site, and smoothed drho and rho+P on hubble scales
+	! to do: add an input to select type of smoothing
 	subroutine get_dzeta_part_kgv_smooth(nsize, dk, r_smooth, Fk1, Fk2, Fk3, planf, planb)
 		integer, dimension(1:3), intent(in) :: nsize
 		real*8 :: dk
@@ -440,15 +441,19 @@ contains
 		! Calculate smoothed dzeta
 		zlap1 = dzeta_part(1,IRANGE)
 		zlap2 = dzeta_part(2,IRANGE)
-		call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator
-		call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator
+		!call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator, Gaussian
+		!call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator, Gaussian
+		call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
+		call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
 		dzeta_part(3,IRANGE) = zlap1(IRANGE)															! smoothed K+V numerator
 		dzeta_part(4,IRANGE) = zlap2(IRANGE)															! smoothed G numerator
 		dzeta_smooth(IRANGE) = zlap1(IRANGE) + zlap2(IRANGE)							! smoothed total numerator
 		zlap1 = epsilon_part(1,IRANGE)
 		zlap2 = epsilon_part(2,IRANGE)
-		call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator
-		call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator
+		!call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, Gaussian
+		!call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, Gaussian
+		call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
+		call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
 		dzeta_part(3,IRANGE) = dzeta_part(3,IRANGE)/(3._dl*zlap1(IRANGE))	! smoothed K+V
 		dzeta_part(4,IRANGE) = dzeta_part(4,IRANGE)/(3._dl*zlap2(IRANGE))	! smoothed G
 		dzeta_smooth(IRANGE) = dzeta_smooth(IRANGE)/(3._dl*(zlap1(IRANGE)+zlap2(IRANGE)))	! smoothed total
@@ -566,48 +571,47 @@ contains
 
 		call fftw_execute_dft_r2c(planf, f1, Fk1)						! compute forward FFT
 		sig_s = -r_smooth/(ysclp / 6._dl / yscl)			! compute sig_s = r_smooth/(aH), division by 3 is for 3 dimensions
+		ker = exp(-0.5*rad2*sig_s**2)/(len)**3				! compute kernal, nvol factor cancelled with inverse transform
 
 		! Loop over lattice, multiply FFT by kernal
 		do k=1,nz; if(k>nnz) then; kk = k-nz-1; else; kk=k-1; endif
 			do j=1,ny; if(j>nny) then; jj = j-ny-1; else; jj=j-1; endif
 				do i=1,nnx
 					rad2 = (ii**2 + jj**2 + kk**2)*dk**2
-					ker = exp(-0.5*rad2*sig_s**2)/(len)**3				! compute kernal, nvol factor cancelled with inverse transform
 					Fk1(LATIND) = Fk1(LATIND)*ker									! convolve and make complex
 				enddo
 			enddo
 		enddo
-		call fftw_execute_dft_c2r(planb, Fk1, f1)			! compute backward FFT, normalization for kernal already done in kernal calculation
+		call fftw_execute_dft_c2r(planb, Fk1, f1)
 		f1 = f1/nvol
 
 	end subroutine gauss_smooth_hub
 
 	! Subroutine that takes in a field as calculated on the lattice and smoothing on some physical scale
-	! to do: write this to make a sharp k space filter, just a place holder for now
-	subroutine sharp_k_smooth_hub(f1, Fk1, r_smooth, planf, planb)
+	subroutine sharp_k_smooth_hub(f1, Fk1, k_smooth, planf, planb)
 		real(C_DOUBLE), pointer :: f1(:,:,:)								! Field to be smoothed
 		complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:)		! Pointer for FFT of field to be smoothed
-		real(dl) :: r_smooth																! number times comoving hubble scale on which to smooth
-		real(dl) :: sig_s																		! Smoothing scale (comoving size)
-		real(dl) :: ker																			! Gaussian kernal for smoothing
+		real(dl) :: k_smooth																! number times horizon to smooth
+		real(dl) :: k_ker																		! sharp k smoothing scale
 		integer :: i,j,k,ii,jj,kk														! lattice labels and wave numbers
 		real(dl) :: rad2																		! radius squared in Fourier space
 		type(C_PTR) :: planf, planb													! FFTW forward and backward plans
 
 		call fftw_execute_dft_r2c(planf, f1, Fk1)						! compute forward FFT
-		sig_s = -r_smooth/(ysclp / 6._dl / yscl)/3._dl			! compute sig_s = r_smooth/(aH), division by 3 is for 3 dimensions
+		k_ker = (k_smooth/(yscl*get_hubble()))**2
 
-		! Loop over lattice, multiply FFT by kernal
+		! Loop over lattice, cut modes outside of sharp k-space filter
 		do k=1,nz; if(k>nnz) then; kk = k-nz-1; else; kk=k-1; endif
 			do j=1,ny; if(j>nny) then; jj = j-ny-1; else; jj=j-1; endif
 				do i=1,nnx
 					rad2 = (ii**2 + jj**2 + kk**2)*dk**2
-					ker = exp(-0.5*rad2*sig_s**2)/(len)**3				! compute kernal, nvol factor cancelled with inverse transform
-					Fk1(LATIND) = Fk1(LATIND)*ker									! convolve and make complex
+					if (rad2>k_ker) then
+						Fk1(LATIND) = (0._dl,0._dl)
+					endif
 				enddo
 			enddo
 		enddo
-		call fftw_execute_dft_c2r(planb, Fk1, f1)			! compute backward FFT, normalization for kernal already done in kernal calculation
+		call fftw_execute_dft_c2r(planb, Fk1, f1)
 		f1 = f1/nvol
 
 	end subroutine sharp_k_smooth_hub
