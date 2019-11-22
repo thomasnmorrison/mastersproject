@@ -15,7 +15,9 @@
 ! to do: output linear/non-linear parts of zeta splits									- done
 
 ! to do: dzeta_lat is a redundant variable with dzeta_part, so at some point can be cleared our
-! to do: I think zf1 znd zf2 are redundant, check if they can be removed
+! to do: add a parameter that will allow the number of zeta parts to be chosen
+! to do: allow for zeta smoothing to be done on multiple scales
+! to do: allow for sharp k filter in zeta smoothing
 
 module zeta_mod
 
@@ -27,6 +29,8 @@ module zeta_mod
 	use hamiltonian
 	use sample_sites_mod
 	use moments_mod
+
+	!integer, parameter :: nzpart = 4												! number of zeta parts
 
 	real(dl) :: zeta = 0.0_dl
 	!real(dl), dimension(2) :: dzeta = (/0.0_dl,0.0_dl/)
@@ -287,67 +291,67 @@ contains
 ! to do: store old value of dzeta_lat_comp
 ! to do: calulate new value of dzeta_lat_comp
 ! to do: double check dzeta partial and epsilon partial calculations 
-	subroutine get_dzeta_part(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
-		integer, dimension(1:3), intent(in) :: nsize
-		real*8 :: dk	
-    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
-		type(C_PTR) :: planf, planb
+!	subroutine get_dzeta_part(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
+!		integer, dimension(1:3), intent(in) :: nsize
+!		real*8 :: dk	
+!    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
+!		type(C_PTR) :: planf, planb!
 
-		integer :: n1, n2, n3
-		integer :: i,j
+!		integer :: n1, n2, n3
+!		integer :: i,j
 
-		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
+!		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
 
-		!dzeta(1) = dzeta(2)	!store old value
-		!dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
-		!dzeta_lat_comp(1,:,IRANGE) = dzeta_lat_comp(2,:,IRANGE)
-		! Store old value of x_A*epsilon_A*dzeta_A/epsilon
-		!do i=1,nfld
-		!	dzeta_part(1,2*i-1,IRANGE) = epsilon_part(i,IRANGE)*dzeta_part(2,2*i-1,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1))
-		!	dzeta_part(1,2*i,IRANGE) = epsilon_part(i,IRANGE)*dzeta_part(2,2*i,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1))
-		!enddo
-		!sample_dzeta(1,:) = sample_dzeta(2,:)
+!		!dzeta(1) = dzeta(2)	!store old value
+!		!dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
+!		!dzeta_lat_comp(1,:,IRANGE) = dzeta_lat_comp(2,:,IRANGE)
+!		! Store old value of x_A*epsilon_A*dzeta_A/epsilon
+!		!do i=1,nfld
+!		!	dzeta_part(1,2*i-1,IRANGE) = epsilon_part(i,IRANGE)*dzeta_part(2,2*i-1,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1))
+!		!	dzeta_part(1,2*i,IRANGE) = epsilon_part(i,IRANGE)*dzeta_part(2,2*i,IRANGE)/(sum(epsilon_part(:,IRANGE) ,dim=1))
+!		!enddo
+!		!sample_dzeta(1,:) = sample_dzeta(2,:)
 
-		zf1(IRANGE) = 0._dl
-		zf2(IRANGE) = 0._dl
-		! Get numerator of dzeta
-		do i=1,nfld
-			zlap1 = fldp(i,IRANGE)
-			zlap2 = fld(i,IRANGE)
-			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
-			zlap1 = fld(i,IRANGE)
-			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
+!		zf1(IRANGE) = 0._dl
+!		zf2(IRANGE) = 0._dl
+!		! Get numerator of dzeta
+!		do i=1,nfld
+!			zlap1 = fldp(i,IRANGE)
+!			zlap2 = fld(i,IRANGE)
+!			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+!			zlap1 = fld(i,IRANGE)
+!			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
 			
-			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1
-			epsilon_part(i,IRANGE) = 1.5_dl*(fldp(i,IRANGE)**2)/yscl**6
-			!dzeta_part(2,2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
-			!dzeta_part(2,2*i,IRANGE) = ggrad1
-			dzeta_part(2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
-			dzeta_part(2*i,IRANGE) = ggrad1
-		enddo
-		! Get denominator of dzeta
-		do i=1,nfld
-			zlap1 = fld(i,IRANGE)
-			zlap2 = fld(i,IRANGE)
-			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
-			
-			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
-			epsilon_part(i,IRANGE) = epsilon_part(i,IRANGE) + 0.5_dl*(ggrad1)/yscl**2
-			!dzeta_part(2,2*i-1,IRANGE) = yscl**2 *dzeta_part(2,2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
-			!dzeta_part(2,2*i,IRANGE) = yscl**2 *dzeta_part(2,2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
-			dzeta_part(2*i-1,IRANGE) = yscl**2 *dzeta_part(2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
-			dzeta_part(2*i,IRANGE) = yscl**2 *dzeta_part(2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
-		enddo			
+!			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1
+!			epsilon_part(i,IRANGE) = 1.5_dl*(fldp(i,IRANGE)**2)/yscl**6
+!			!dzeta_part(2,2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
+!			!dzeta_part(2,2*i,IRANGE) = ggrad1
+!			dzeta_part(2*i-1,IRANGE) =  fldp(i,IRANGE)*zlap1
+!			dzeta_part(2*i,IRANGE) = ggrad1
+!		enddo
+!		! Get denominator of dzeta
+!		do i=1,nfld
+!			zlap1 = fld(i,IRANGE)
+!			zlap2 = fld(i,IRANGE)
+!			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+!			
+!			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
+!			epsilon_part(i,IRANGE) = epsilon_part(i,IRANGE) + 0.5_dl*(ggrad1)/yscl**2
+!			!dzeta_part(2,2*i-1,IRANGE) = yscl**2 *dzeta_part(2,2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+!			!dzeta_part(2,2*i,IRANGE) = yscl**2 *dzeta_part(2,2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+!			dzeta_part(2*i-1,IRANGE) = yscl**2 *dzeta_part(2*i-1,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+!			dzeta_part(2*i,IRANGE) = yscl**2 *dzeta_part(2*i,IRANGE) / (3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1)
+!		enddo			
 		! Calculate dzeta
 		!dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
 		!dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
-		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
-		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
+!		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
+!		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
 
 		!do i=1,n_sample
 		!	sample_dzeta(2,i) = dzeta_lat(2,sample_site(i,1),sample_site(i,2),sample_site(i,3))
 		!enddo
-	end subroutine get_dzeta_part
+!	end subroutine get_dzeta_part
 
 ! Subroutine to calculate dzeta and the components of dzeta for kinetic, gradient and potential terms
 ! n.b. watch the factors of yscl and to what factors they are applied
@@ -502,55 +506,85 @@ contains
 ! Subroutine to calculate dzeta using a smoothed stress energy tensor
 ! to do: use lat_smooth to smooth stress energy tensor
 ! to do: update variables for smoothing scale
-	subroutine get_dzeta_smooth(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
-		integer, dimension(1:3), intent(in) :: nsize
-		real*8 :: dk	
-    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
-		type(C_PTR) :: planf, planb
+!	subroutine get_dzeta_smooth(nsize, dk, Fk1, Fk2, Fk3, planf, planb)
+!		integer, dimension(1:3), intent(in) :: nsize
+!		real*8 :: dk	
+!    complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:),Fk2(:,:,:),Fk3(:,:,:)
+!		type(C_PTR) :: planf, planb
 
-		integer :: n1, n2, n3
-		integer :: i,j
+!		integer :: n1, n2, n3
+!		integer :: i,j
 	
-		real(dl), parameter :: eps_smooth = 1._dl
+!		real(dl), parameter :: eps_smooth = 1._dl
 
-		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
+!		n1 = nsize(1); n2 = nsize(2); n3 = nsize(3)
 
-		!dzeta(1) = dzeta(2)	!store old value
-		!dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
-		!sample_dzeta(1,:) = sample_dzeta(2,:)
+!		!dzeta(1) = dzeta(2)	!store old value
+!		!dzeta_lat(1,IRANGE) = dzeta_lat(2,IRANGE)
+!		!sample_dzeta(1,:) = sample_dzeta(2,:)
 
-		zf1(IRANGE) = 0._dl
-		zf2(IRANGE) = 0._dl
-		! Get numerator of dzeta
-		do i=1,nfld
-			zlap1 = fldp(i,IRANGE)
-			zlap2 = fld(i,IRANGE)
-			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
-			zlap1 = fld(i,IRANGE)
-			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
+!		zf1(IRANGE) = 0._dl
+!		zf2(IRANGE) = 0._dl
+!		! Get numerator of dzeta
+!		do i=1,nfld
+!			zlap1 = fldp(i,IRANGE)
+!			zlap2 = fld(i,IRANGE)
+!			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+!			zlap1 = fld(i,IRANGE)
+!			call laplacian_spectral(n1,n2,n3,zlap1,Fk1,dk,planf,planb)		
+!
+!			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1
+!		enddo
+!		! Get denominator of dzeta
+!		do i=1,nfld
+!			zlap1 = fld(i,IRANGE)
+!			zlap2 = fld(i,IRANGE)
+!			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
+!			
+!			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
+!		enddo
+!		call gauss_smooth_hub(zf1, Fk1, eps_smooth, planf, planb)
+!		call gauss_smooth_hub(zf2, Fk1, eps_smooth, planf, planb)	
+!		! Calculate dzeta
+!		!dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
+!		!dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
+!		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
+!		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
 
-			zf1 = zf1 + ggrad1 + fldp(i,IRANGE)*zlap1
-		enddo
-		! Get denominator of dzeta
-		do i=1,nfld
-			zlap1 = fld(i,IRANGE)
-			zlap2 = fld(i,IRANGE)
-			call graddotgrad(nsize,dk,zlap1,zlap2,ggrad1,Fk1,Fk2,Fk3, planf, planb)
-			
-			zf2 = zf2 + 3.0_dl*fldp(i,IRANGE)**2 + yscl**4*ggrad1
-		enddo
-		call gauss_smooth_hub(zf1, Fk1, eps_smooth, planf, planb)
-		call gauss_smooth_hub(zf2, Fk1, eps_smooth, planf, planb)	
-		! Calculate dzeta
-		!dzeta_lat(2,IRANGE) = yscl**2 * zf1 / zf2
-		!dzeta(2) = sum(dzeta_lat(2, IRANGE))/dble(n1)/dble(n2)/dble(n3)
-		dzeta_lat(IRANGE) = yscl**2 * zf1 / zf2
-		dzeta = sum(dzeta_lat(IRANGE))/dble(n1)/dble(n2)/dble(n3)
-
-	end subroutine get_dzeta_smooth
+!	end subroutine get_dzeta_smooth
 
 	! Subroutine that takes in a field as calculated on the lattice and smoothing on some physical scale
 	subroutine gauss_smooth_hub(f1, Fk1, r_smooth, planf, planb)
+		real(C_DOUBLE), pointer :: f1(:,:,:)								! Field to be smoothed
+		complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:)		! Pointer for FFT of field to be smoothed
+		real(dl) :: r_smooth																! number times comoving hubble scale on which to smooth
+		real(dl) :: sig_s																		! Smoothing scale (comoving size)
+		real(dl) :: ker																			! Gaussian kernal for smoothing
+		integer :: i,j,k,ii,jj,kk														! lattice labels and wave numbers
+		real(dl) :: rad2																		! radius squared in Fourier space
+		type(C_PTR) :: planf, planb													! FFTW forward and backward plans
+
+		call fftw_execute_dft_r2c(planf, f1, Fk1)						! compute forward FFT
+		sig_s = -r_smooth/(ysclp / 6._dl / yscl)			! compute sig_s = r_smooth/(aH), division by 3 is for 3 dimensions
+
+		! Loop over lattice, multiply FFT by kernal
+		do k=1,nz; if(k>nnz) then; kk = k-nz-1; else; kk=k-1; endif
+			do j=1,ny; if(j>nny) then; jj = j-ny-1; else; jj=j-1; endif
+				do i=1,nnx
+					rad2 = (ii**2 + jj**2 + kk**2)*dk**2
+					ker = exp(-0.5*rad2*sig_s**2)/(len)**3				! compute kernal, nvol factor cancelled with inverse transform
+					Fk1(LATIND) = Fk1(LATIND)*ker									! convolve and make complex
+				enddo
+			enddo
+		enddo
+		call fftw_execute_dft_c2r(planb, Fk1, f1)			! compute backward FFT, normalization for kernal already done in kernal calculation
+		f1 = f1/nvol
+
+	end subroutine gauss_smooth_hub
+
+	! Subroutine that takes in a field as calculated on the lattice and smoothing on some physical scale
+	! to do: write this to make a sharp k space filter, just a place holder for now
+	subroutine sharp_k_smooth_hub(f1, Fk1, r_smooth, planf, planb)
 		real(C_DOUBLE), pointer :: f1(:,:,:)								! Field to be smoothed
 		complex(C_DOUBLE_COMPLEX), pointer :: Fk1(:,:,:)		! Pointer for FFT of field to be smoothed
 		real(dl) :: r_smooth																! number times comoving hubble scale on which to smooth
@@ -576,7 +610,7 @@ contains
 		call fftw_execute_dft_c2r(planb, Fk1, f1)			! compute backward FFT, normalization for kernal already done in kernal calculation
 		f1 = f1/nvol
 
-	end subroutine gauss_smooth_hub
+	end subroutine sharp_k_smooth_hub
 
 ! calculates grad(f1).grad(f2) and outputs in gg (f1 and f2 are also overwritten)
 ! check if I can do this by updating a partial sum
