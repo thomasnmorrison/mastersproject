@@ -570,7 +570,7 @@ contains
 		type(C_PTR) :: planf, planb													! FFTW forward and backward plans
 
 		call fftw_execute_dft_r2c(planf, f1, Fk1)						! compute forward FFT
-		sig_s = -r_smooth/(ysclp / 6._dl / yscl)			! compute sig_s = r_smooth/(aH), division by 3 is for 3 dimensions
+		sig_s = r_smooth/(yscl*get_hubble())			! compute sig_s = r_smooth/(aH), division by 3 is for 3 dimensions
 		ker = exp(-0.5*rad2*sig_s**2)/(len)**3				! compute kernal, nvol factor cancelled with inverse transform
 
 		! Loop over lattice, multiply FFT by kernal
@@ -598,7 +598,7 @@ contains
 		type(C_PTR) :: planf, planb													! FFTW forward and backward plans
 
 		call fftw_execute_dft_r2c(planf, f1, Fk1)						! compute forward FFT
-		k_ker = (k_smooth/(yscl*get_hubble()))**2
+		k_ker = (k_smooth*(yscl*get_hubble()))**2
 
 		! Loop over lattice, cut modes outside of sharp k-space filter
 		do k=1,nz; if(k>nnz) then; kk = k-nz-1; else; kk=k-1; endif
