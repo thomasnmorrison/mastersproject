@@ -17,7 +17,6 @@
 ! to do: dzeta_lat is a redundant variable with dzeta_part, so at some point can be cleared our
 ! to do: add a parameter that will allow the number of zeta parts to be chosen
 ! to do: allow for zeta smoothing to be done on multiple scales
-! to do: allow for sharp k filter in zeta smoothing
 
 module zeta_mod
 
@@ -30,7 +29,7 @@ module zeta_mod
 	use sample_sites_mod
 	use moments_mod
 
-	!integer, parameter :: nzpart = 4												! number of zeta parts
+	integer, parameter :: nzpart = 4												! number of zeta parts
 
 	real(dl) :: zeta = 0.0_dl
 	!real(dl), dimension(2) :: dzeta = (/0.0_dl,0.0_dl/)
@@ -44,8 +43,8 @@ module zeta_mod
 	real(dl), dimension(2,IRANGE) :: epsilon_part						! components rho*x_A*epsilon_A, slpit as kinetic, gradient
 	!real(dl), dimension(2*nfld,IRANGE) :: zeta_part				! zeta component calculated from individual fields (and linear/non-linear)
 	!real(dl), dimension(2,2*nfld,IRANGE) :: dzeta_part			! dzeta/dtau component calculated from individual fields
-	real(dl), dimension(4,IRANGE) :: zeta_part							! zeta component calculated from K+V, G, K, G+V
-	real(dl), dimension(4,IRANGE) :: dzeta_part							! dzeta/dtau component calculated from K+V, G, K, G+V
+	real(dl), dimension(nzpart,IRANGE) :: zeta_part					! zeta component calculated from K+V, G, K, G+V
+	real(dl), dimension(nzpart,IRANGE) :: dzeta_part				! dzeta/dtau component calculated from K+V, G, K, G+V
 	
 	! additional pointers needed for calculating dzeta
 	real(C_DOUBLE), pointer :: ggrad1(:,:,:)
@@ -454,8 +453,8 @@ contains
 		!call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, Gaussian
 		call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
 		call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
-		dzeta_part(3,IRANGE) = dzeta_part(3,IRANGE)/(3._dl*zlap1(IRANGE))	! smoothed K+V
-		dzeta_part(4,IRANGE) = dzeta_part(4,IRANGE)/(3._dl*zlap2(IRANGE))	! smoothed G
+		dzeta_part(3,IRANGE) = dzeta_part(3,IRANGE)!/(3._dl*zlap1(IRANGE))	! smoothed K+V testing
+		dzeta_part(4,IRANGE) = dzeta_part(4,IRANGE)!/(3._dl*zlap2(IRANGE))	! smoothed G testing
 		dzeta_smooth(IRANGE) = dzeta_smooth(IRANGE)/(3._dl*(zlap1(IRANGE)+zlap2(IRANGE)))	! smoothed total
 
 		! Calculate dzeta parts
@@ -576,7 +575,7 @@ contains
 		! Loop over lattice, multiply FFT by kernal
 		do k=1,nz; if(k>nnz) then; kk = k-nz-1; else; kk=k-1; endif
 			do j=1,ny; if(j>nny) then; jj = j-ny-1; else; jj=j-1; endif
-				do i=1,nnx
+				do i=1,nnx; ii = i-1
 					rad2 = (ii**2 + jj**2 + kk**2)*dk**2
 					Fk1(LATIND) = Fk1(LATIND)*ker									! convolve and make complex
 				enddo
@@ -603,10 +602,10 @@ contains
 		! Loop over lattice, cut modes outside of sharp k-space filter
 		do k=1,nz; if(k>nnz) then; kk = k-nz-1; else; kk=k-1; endif
 			do j=1,ny; if(j>nny) then; jj = j-ny-1; else; jj=j-1; endif
-				do i=1,nnx
-					rad2 = (ii**2 + jj**2 + kk**2)*dk**2
+				do i=1,nnx; ii = i-1
+					rad2 = dble(ii**2 + jj**2 + kk**2)*dk**2
 					if (rad2>k_ker) then
-						Fk1(LATIND) = (0._dl,0._dl)
+						Fk1(LATIND) = Fk1(LATIND)*0._dl
 					endif
 				enddo
 			enddo
