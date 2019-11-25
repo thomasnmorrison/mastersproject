@@ -440,21 +440,21 @@ contains
 		! Calculate smoothed dzeta
 		zlap1 = dzeta_part(1,IRANGE)
 		zlap2 = dzeta_part(2,IRANGE)
-		!call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator, Gaussian
-		!call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator, Gaussian
-		call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
-		call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
+		call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator, Gaussian
+		call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator, Gaussian
+		!call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
+		!call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
 		dzeta_part(3,IRANGE) = zlap1(IRANGE)															! smoothed K+V numerator
 		dzeta_part(4,IRANGE) = zlap2(IRANGE)															! smoothed G numerator
 		dzeta_smooth(IRANGE) = zlap1(IRANGE) + zlap2(IRANGE)							! smoothed total numerator
 		zlap1 = epsilon_part(1,IRANGE)
 		zlap2 = epsilon_part(2,IRANGE)
-		!call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, Gaussian
-		!call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, Gaussian
-		call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
-		call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
-		dzeta_part(3,IRANGE) = dzeta_part(3,IRANGE)!/(3._dl*zlap1(IRANGE))	! smoothed K+V testing
-		dzeta_part(4,IRANGE) = dzeta_part(4,IRANGE)!/(3._dl*zlap2(IRANGE))	! smoothed G testing
+		call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, Gaussian
+		call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, Gaussian
+		!call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
+		!call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
+		dzeta_part(3,IRANGE) = dzeta_part(3,IRANGE)/(3._dl*zlap1(IRANGE))	! smoothed K+V testing
+		dzeta_part(4,IRANGE) = dzeta_part(4,IRANGE)/(3._dl*zlap2(IRANGE))	! smoothed G testing
 		dzeta_smooth(IRANGE) = dzeta_smooth(IRANGE)/(3._dl*(zlap1(IRANGE)+zlap2(IRANGE)))	! smoothed total
 
 		! Calculate dzeta parts
@@ -570,13 +570,13 @@ contains
 
 		call fftw_execute_dft_r2c(planf, f1, Fk1)						! compute forward FFT
 		sig_s = r_smooth/(yscl*get_hubble())			! compute sig_s = r_smooth/(aH), division by 3 is for 3 dimensions
-		ker = exp(-0.5*rad2*sig_s**2)/(len)**3				! compute kernal, nvol factor cancelled with inverse transform
-
+		
 		! Loop over lattice, multiply FFT by kernal
 		do k=1,nz; if(k>nnz) then; kk = k-nz-1; else; kk=k-1; endif
 			do j=1,ny; if(j>nny) then; jj = j-ny-1; else; jj=j-1; endif
 				do i=1,nnx; ii = i-1
 					rad2 = (ii**2 + jj**2 + kk**2)*dk**2
+					ker = exp(-0.5*rad2*sig_s**2)/(len)**3				! compute kernal, nvol factor cancelled with inverse transform
 					Fk1(LATIND) = Fk1(LATIND)*ker									! convolve and make complex
 				enddo
 			enddo
