@@ -2,9 +2,12 @@
 !#define DISCRETE 1
 
 !#define RENORM 0
-!#define ONEFLD 1
-#define TWOFLD2 1
+#define ONEFLD 1
+!#define TWOFLD2 1
 !#define GHOST 1
+
+#define GAUSS_SMOOTH 1
+!#define K_TOPHAT_SMOOTH 1
 
 #define WINT 1
 

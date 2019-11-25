@@ -440,19 +440,27 @@ contains
 		! Calculate smoothed dzeta
 		zlap1 = dzeta_part(1,IRANGE)
 		zlap2 = dzeta_part(2,IRANGE)
+#ifdef GAUSS_SMOOTH
 		call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator, Gaussian
 		call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator, Gaussian
-		!call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
-		!call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
+#endif
+#ifdef K_TOPHAT_SMOOTH
+		call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
+		call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing numerator, sharp k
+#endif
 		dzeta_part(3,IRANGE) = zlap1(IRANGE)															! smoothed K+V numerator
 		dzeta_part(4,IRANGE) = zlap2(IRANGE)															! smoothed G numerator
 		dzeta_smooth(IRANGE) = zlap1(IRANGE) + zlap2(IRANGE)							! smoothed total numerator
 		zlap1 = epsilon_part(1,IRANGE)
 		zlap2 = epsilon_part(2,IRANGE)
+#ifdef GAUSS_SMOOTH
 		call gauss_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, Gaussian
 		call gauss_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, Gaussian
-		!call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
-		!call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
+#endif
+#ifdef K_TOPHAT_SMOOTH
+		call sharp_k_smooth_hub(zlap1, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
+		call sharp_k_smooth_hub(zlap2, Fk1, r_smooth, planf, planb)					! smoothing denominator, sharp k
+#endif
 		dzeta_part(3,IRANGE) = dzeta_part(3,IRANGE)/(3._dl*zlap1(IRANGE))	! smoothed K+V testing
 		dzeta_part(4,IRANGE) = dzeta_part(4,IRANGE)/(3._dl*zlap2(IRANGE))	! smoothed G testing
 		dzeta_smooth(IRANGE) = dzeta_smooth(IRANGE)/(3._dl*(zlap1(IRANGE)+zlap2(IRANGE)))	! smoothed total
