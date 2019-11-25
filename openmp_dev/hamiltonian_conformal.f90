@@ -27,6 +27,7 @@ module Hamiltonian
   real(dl), parameter :: phi0 = 8.8251_dl!3.2_dl+0.7_dl!3.402544_dl!3.4_dl! + 0.25_dl!sqrt(0.8164/sqrt(g2))!7.511816626277513_dl!2.3393837654714997732962993666073! infl*2.309401076758!7.502897008008175! !		
   real(dl), parameter :: dphi0 = -0.81538!-dsqrt(2.0_dl/3.0_dl)!-0.796975_dl!-8.676026729772402_dl!-2.7363582010758065274616992909302!-infl*2.0_dl!-8.665116194188870! !
   real(dl), parameter :: chi0 = 0.0_dl !-3.38704185098e-7!3.9e-7 !
+	real(dl), parameter :: dchi0 = 0.0_dl
   real(dl), parameter :: H0 = 3.6182_dl!1.627_dl !1.460_dl!1.426786_dl! !6.6599_dl!phi0/dsqrt(6.0_dl)!16.669825812765081_dl!1.9348974397391251388968698880012! infl**2*1.539600717839!1.631101666210758e1! !	
 #ifdef ONEFLD			
   real(dl), parameter, dimension(nfld) :: fld0 = (/phi0/)!(/0._dl,0._dl/)!(/phi0,chi0/)!
@@ -34,7 +35,7 @@ module Hamiltonian
 #endif
 #ifdef TWOFLD2
 	real(dl), parameter, dimension(nfld) :: fld0 = (/phi0,chi0/)
-	real(dl), parameter, dimension(nfld) :: dfld0 = (/dphi0,0.0_dl/)
+	real(dl), parameter, dimension(nfld) :: dfld0 = (/dphi0,dchi0/)
 #endif  
 
   integer, parameter :: n_Hamiltonian_terms = 3

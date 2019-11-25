@@ -30,8 +30,6 @@
 ! to do: output file with the run parameters, may be best to output this to terminal so the Niagara job output file contains this information as it is uniquely named
 ! to do: make a precompiler statement for choosing how rho is remormalized
 ! to do: make a precompiler for how fields are initialized
-! to do: make spectrum output for zeta parts
-! to do: make spectrum outputs only as often as lattice slice outputs
 
 program lattice
 #include "macros.h"
@@ -51,7 +49,7 @@ program lattice
   implicit none
 ! Time Stepping Properties
   integer :: j, jj
-  integer, parameter :: nstep = 2**8 			! Determines total number of output steps
+  integer, parameter :: nstep = 2**5 			! Determines total number of output steps
   integer, parameter :: stepsize = 2**5		! Determines number of integration steps between outputing data
 	integer, parameter :: stepslice = 2**3	! Determines number of output steps between outputing a lattice slice
 	integer, parameter :: zslice = nz/2 		! Determines which slice of the lattice is output
@@ -157,6 +155,7 @@ program lattice
 	!call get_dzeta_smooth([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)	! call for smoothed zeta
 
 	t_cur = 0.0_dl
+	call output_run_param(88)
 	call make_output(0._dl, 0)
   do j=1,nstep
      print*,"step ", j
@@ -199,8 +198,8 @@ program lattice
 !	call allocate_3d_real_array(nx,ny,nz,ggrad2)
 !	call allocate_3d_real_array(nx,ny,nz,ggrad3)
 !	call allocate_3d_real_array(nx,ny,nz,ggrad4)
-	call allocate_3d_real_array(nx,ny,nz,zf1)
-	call allocate_3d_real_array(nx,ny,nz,zf2)
+!	call allocate_3d_real_array(nx,ny,nz,zf1)
+!	call allocate_3d_real_array(nx,ny,nz,zf2)
 !	call allocate_3d_real_array(nx,ny,nz,zf3)!new
 !	call allocate_3d_real_array(nx,ny,nz,zf4)!new
 !	call allocate_3d_real_array(nx,ny,nz,zfp1)
@@ -663,8 +662,8 @@ program lattice
 
     subroutine init_output()
       !open(unit=99,file="field_values_spec.out")
-      open(unit=98,file="energy_spec.out")
-      open(unit=97,file="spectrum.out")
+			open(unit=98,file="energy_spec.out")
+			open(unit=97,file="spectrum.out")
 			open(unit=96,file="zeta.out")
 			open(unit=94,file="lat_sample.out")
 			!open(unit=92,file="lat_dump.out",form="unformatted") !TESTING REQUIRED! binary file of field output
@@ -688,17 +687,31 @@ program lattice
     end subroutine init_output
 		
 		! Subroutine to output the run parameters in a human readable way
-		subroutine output_run_param()
-			write(88), "nx, ny, nz: ",nx,ny,nz
-			write(88), "len: ",len
-			write(88), "phi0, dphi0, H0: ",phi0,dphi0,H0
-			write(88), "infl_option, potential_option: ",infl_option, potential_option
-			write(88), "mpl: ",mpl
-			if (infl_option == 1) then
-				write(88), "m2"
-			elseif (infl_option == 2) then
+		subroutine output_run_param(n_file)
+			integer :: n_file		! file number
+			write(n_file, '(A, 2x, 3(I5,2x))'), "nx, ny, nz: ", nx, ny, nz
+			write(n_file, '(A, 2x, ES22.15, 2x)'), "len: ", len
+			write(n_file, '(A, 2x, ES22.15, 2x)'), "mpl: ", mpl
+			if (nfld==1) then
+				write(n_file, '(A, 2x, 3(ES22.15, 2x))'), "phi0, dphi0, H0: ", phi0, dphi0, H0
+			elseif (nfld==2) then
+				write(n_file, '(A, 2x, 5(ES22.15, 2x))'), "phi0, dphi0, chi0, dchi0, H0: ", phi0, dphi0, chi0, dchi0, H0
 			endif
-			close(unit=88)
+			write(n_file, '(A, 2x, I5,2x)'), "infl_option: ", infl_option
+			if (nfld == 2) then
+				write(n_file, '(A, 2x, I5,2x)'), "potential_option: ", potential_option
+			endif
+			if (infl_option == 2) then
+				write(n_file, '(A, 2x, (ES22.15, 2x))'), "m2", m2
+			endif
+			if (potential_option == 5 .and. nfld == 2) then
+				write(n_file, '(A, 2x, (ES22.15, 2x))'), "lambda_chi: ", lambda_chi 
+				write(n_file, '(A, 2x, (ES22.15, 2x))'), "m2_inf: ", m2_inf
+			elseif (potential_option == 6 .and. nfld == 2) then
+				write(n_file, '(A, 2x, (ES22.15, 2x))'), "lambda_chi: ", lambda_chi
+				write(n_file, '(A, 2x, 4(ES22.15, 2x))'), "phi_p, phi_w, m2_inf, m2_p: ", phi_p, phi_w, m2_inf, m2_p
+			endif
+			close(unit=n_file)
 		end subroutine output_run_param
 
     subroutine make_output(time, step)
@@ -706,17 +719,14 @@ program lattice
 			integer :: step
       integer :: i
       !real(dl) :: spec(ns,2*nfld+2)
-			real(dl) :: spec(ns,(nfld*2)**2+4)  !to spectum and cross spec for both fields and zeta spectrum
+			!real(dl) :: spec(ns,(nfld*2)**2+4)  !to spectum and cross spec for both fields and zeta spectrum
 			!real(dl) :: spec(ns,2*(4*nfld+4)) !to spectrum and cross spec for both fields and zeta and difference 
 
-!      call write_fields(time)
       call dump_rho(time)
 			call write_zeta(time, 96)
-			!laplace(IRANGE) = zeta_lat(IRANGE)
-			!call lat_smooth(laplace, Fk, 1._dl, planf, planb)
-			!call write_moments(laplace, 87)
 			call write_lat_sample(time)
 			if (0 == mod(step, stepslice)) then
+				call write_spec(97)
 				call write_slice(time, zslice, 90)
 				call write_zeta_partial(time, zslice, 86)
 				call write_zeta_part_spec(85)
@@ -731,7 +741,7 @@ program lattice
 !#endif 
 
 !      laplace(IRANGE) = fld(2,IRANGE) !commented out due to being for two field model
-#ifdef THREEDIM
+!#ifdef THREEDIM
       !laplace(IRANGE) = fld(1,IRANGE)
       !call spectrum_3d(spec(:,1),laplace, Fk, planf)
       !Fk2=Fk
@@ -771,40 +781,40 @@ program lattice
 			!call crossspec_3d(Fk, Fk2, spec(:,11), spec(:,12))
 
 ! zeta spec output
-			laplace(IRANGE) = zeta_lat(IRANGE)
-			call spectrum_3d(spec(:,1), laplace, Fk, planf)
-			Fk2=Fk
-			laplace(IRANGE) = dzeta_lat(IRANGE)	!laplace(IRANGE) = dzeta_lat(2,IRANGE)
-			call spectrum_3d(spec(:,2), laplace, Fk, planf)
-			call crossspec_3d(Fk, Fk2, spec(:,3), spec(:,4))
+!			laplace(IRANGE) = zeta_lat(IRANGE)
+!			call spectrum_3d(spec(:,1), laplace, Fk, planf)
+!			Fk2=Fk
+!			laplace(IRANGE) = dzeta_lat(IRANGE)	!laplace(IRANGE) = dzeta_lat(2,IRANGE)
+!			call spectrum_3d(spec(:,2), laplace, Fk, planf)
+!			call crossspec_3d(Fk, Fk2, spec(:,3), spec(:,4))
 ! field spec output
-			do i=1,1
-      	laplace(IRANGE) = fld(i,IRANGE)
-      	call spectrum_3d(spec(:,4*i+1),laplace, Fk, planf)
-      	Fk2=Fk
-      	laplace(IRANGE) = fldp(i,IRANGE)
-      	call spectrum_3d(spec(:,4*i+2), laplace, Fk, planf)
-      	call crossspec_3d(Fk, Fk2, spec(:,4*i+3),spec(:,4*i+4)) !check ordering for real vs imaginary parts
-			enddo
-#ifdef TWOFLD2
+!			do i=1,1
+!      	laplace(IRANGE) = fld(i,IRANGE)
+!      	call spectrum_3d(spec(:,4*i+1),laplace, Fk, planf)
+!      	Fk2=Fk
+!      	laplace(IRANGE) = fldp(i,IRANGE)
+!      	call spectrum_3d(spec(:,4*i+2), laplace, Fk, planf)
+!      	call crossspec_3d(Fk, Fk2, spec(:,4*i+3),spec(:,4*i+4)) !check ordering for real vs imaginary parts
+!			enddo
+!#ifdef TWOFLD2
 ! two field model output
-			laplace(IRANGE) = fld(2,IRANGE)
-			call spectrum_3d(spec(:,9),laplace, Fk3, planf)
-      Fk4=Fk3
-      laplace(IRANGE) = fldp(2,IRANGE)
-      call spectrum_3d(spec(:,10), laplace, Fk3, planf)
-			call crossspec_3d(Fk3, Fk4, spec(:,11), spec(:,12))
+!			laplace(IRANGE) = fld(2,IRANGE)
+!			call spectrum_3d(spec(:,9),laplace, Fk3, planf)
+!      Fk4=Fk3
+!      laplace(IRANGE) = fldp(2,IRANGE)
+!      call spectrum_3d(spec(:,10), laplace, Fk3, planf)
+!			call crossspec_3d(Fk3, Fk4, spec(:,11), spec(:,12))
 ! two field cross spectrum output
 			! crossspec takes ft'ed inputs, can avoid doing the same fft twice
 			! Fk - dphi
 			! Fk2 - phi
 			! Fk3 - dchi
 			! Fk4 - chi
-			call crossspec_3d(Fk2, Fk4, spec(:,13), spec(:,14)) !phi-chi
-			call crossspec_3d(Fk2, Fk3, spec(:,15), spec(:,16)) !phi-dchi
-			call crossspec_3d(Fk, Fk4, spec(:,17), spec(:,18)) !dphi-chi
-			call crossspec_3d(Fk, Fk3, spec(:,19), spec(:,20)) !dphi-dchi			 	
-#endif
+!			call crossspec_3d(Fk2, Fk4, spec(:,13), spec(:,14)) !phi-chi
+!			call crossspec_3d(Fk2, Fk3, spec(:,15), spec(:,16)) !phi-dchi
+!			call crossspec_3d(Fk, Fk4, spec(:,17), spec(:,18)) !dphi-chi
+!			call crossspec_3d(Fk, Fk3, spec(:,19), spec(:,20)) !dphi-dchi			 	
+!#endif
 
 ! Spectrum of difference
 ! Untested, requires two modes of running, can have two verisions of this function that are toggled by either a precompiler
@@ -835,17 +845,17 @@ program lattice
 !			call spectrum_3d(spec(:,22), laplace, Fk, planf)
 !			call crossspec_3d(Fk, Fk2, spec(:,23), spec(:,24))
 !#endif
-#endif
-#ifdef TWODIM
-      call spectrum_2d(spec, laplace, Fk, planf)
-#endif
-#ifdef ONEDIM
-      call spectrum_1d(spec, laplace, Fk, planf)
-#endif
-      do i=1,ns
-         write(97,'(30(ES22.15,2x))') (i-1)*dk, spec(i,:)
-      enddo
-      write(97,*)
+!#endif
+!#ifdef TWODIM
+!      call spectrum_2d(spec, laplace, Fk, planf)
+!#endif
+!#ifdef ONEDIM
+!      call spectrum_1d(spec, laplace, Fk, planf)
+!#endif
+!      do i=1,ns
+!         write(97,'(30(ES22.15,2x))') (i-1)*dk, spec(i,:)
+!      enddo
+!      write(97,*)
       
     end subroutine make_output
 
@@ -875,6 +885,59 @@ program lattice
       enddo
       write(n_file,*)	
 		end subroutine write_zeta_part_spec
+
+		! Subroutine to calculate and output the spectra and cross spectra of the fields and zeta
+		! Formatting: 
+		subroutine write_spec(n_file)
+			integer :: n_file		! file number
+			real(dl) :: spec(ns,(nfld*2)**2+4)  !to spectum and cross spec for both fields and zeta spectrum
+			integer :: i				! indexing variable
+#ifdef THREEDIM
+! zeta spec output
+			laplace(IRANGE) = zeta_lat(IRANGE)
+			call spectrum_3d(spec(:,1), laplace, Fk, planf)
+			Fk2=Fk
+			laplace(IRANGE) = dzeta_lat(IRANGE)	!laplace(IRANGE) = dzeta_lat(2,IRANGE)
+			call spectrum_3d(spec(:,2), laplace, Fk, planf)
+			call crossspec_3d(Fk, Fk2, spec(:,3), spec(:,4))
+			! one field spec output
+			do i=1,1
+      	laplace(IRANGE) = fld(i,IRANGE)
+      	call spectrum_3d(spec(:,4*i+1),laplace, Fk, planf)
+      	Fk2=Fk
+      	laplace(IRANGE) = fldp(i,IRANGE)
+      	call spectrum_3d(spec(:,4*i+2), laplace, Fk, planf)
+      	call crossspec_3d(Fk, Fk2, spec(:,4*i+3),spec(:,4*i+4)) !check ordering for real vs imaginary parts
+			enddo
+#ifdef TWOFLD2
+			! two field model output
+			laplace(IRANGE) = fld(2,IRANGE)
+			call spectrum_3d(spec(:,9),laplace, Fk3, planf)
+      Fk4=Fk3
+      laplace(IRANGE) = fldp(2,IRANGE)
+      call spectrum_3d(spec(:,10), laplace, Fk3, planf)
+			call crossspec_3d(Fk3, Fk4, spec(:,11), spec(:,12))
+			! two field cross spectrum output
+			! crossspec takes ft'ed inputs, can avoid doing the same fft twice
+			! Fk - dphi, Fk2 - phi, Fk3 - dchi, Fk4 - chi
+			call crossspec_3d(Fk2, Fk4, spec(:,13), spec(:,14)) !phi-chi
+			call crossspec_3d(Fk2, Fk3, spec(:,15), spec(:,16)) !phi-dchi
+			call crossspec_3d(Fk, Fk4, spec(:,17), spec(:,18)) !dphi-chi
+			call crossspec_3d(Fk, Fk3, spec(:,19), spec(:,20)) !dphi-dchi			 	
+#endif
+#endif
+#ifdef TWODIM
+      call spectrum_2d(spec, laplace, Fk, planf)
+#endif
+#ifdef ONEDIM
+      call spectrum_1d(spec, laplace, Fk, planf)
+#endif
+      do i=1,ns
+         write(n_file,'(30(ES22.15,2x))') (i-1)*dk, spec(i,:)
+      enddo
+      write(n_file,*)
+      
+		end subroutine write_spec
 
 		! Output homogeneous intitial conditions to file
 		subroutine output_homogeneous()

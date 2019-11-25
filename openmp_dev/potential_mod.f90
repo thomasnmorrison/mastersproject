@@ -64,9 +64,9 @@ module potential_mod
 	! set m2_inf under "potential_option = 4 parameters"
 
 	! potential_option = 6 parameters
-	real(dl), parameter :: c_4 = 0.05_dl															! width of delta V, with g2 as a derived parameter
-	!real(dl), parameter :: c_4 = sqrt(2._dl*(m2_inf-m2_p)/g2)		! width of delta V as a derived parameter
-	real(dl), parameter :: g2 = 2._dl*(m2_inf-m2_p)/c_4**2				! coupling strength as a derived parameter
+	real(dl), parameter :: phi_w = 0.05_dl															! width of delta V, with g2 as a derived parameter
+	!real(dl), parameter :: phi_w = sqrt(2._dl*(m2_inf-m2_p)/g2)		! width of delta V as a derived parameter
+	real(dl), parameter :: g2 = 2._dl*(m2_inf-m2_p)/phi_w**2				! coupling strength as a derived parameter
 	! Also set g2, m2_inf, m2_p, and phi_p
 
 contains
@@ -172,7 +172,7 @@ contains
 		elseif (potential_option==5) then
 			Delta_V = 0.5 * m2_inf * f2**2
 		elseif (potential_option==6) then
-			Delta_V = 0.5_dl * (m2_inf + (-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4)) * f2**2
+			Delta_V = 0.5_dl * (m2_inf + (-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4)) * f2**2
 		endif
   end function Delta_V
 
@@ -185,11 +185,11 @@ contains
 
 		if (ind==1) then
 			if (potential_option==6) then
-				dV_int = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
+				dV_int = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
 			endif
 		elseif (ind==2) then
 			if (potential_option==6) then
-				dV_int = (-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - 0.25_dl*g2**2/(m2_inf-m2_p)*(f1-phi_p)**4) * f2
+				dV_int = (-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - 0.25_dl*g2**2/(m2_inf-m2_p)*(f1-phi_p)**4) * f2
 			endif
 		endif
 
@@ -246,9 +246,9 @@ contains
 			endif
 		elseif (potential_option==6) then
 			if (ind==1) then
-				Delta_dV = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
+				Delta_dV = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
 			elseif (ind==2) then
-				Delta_dV = (m2_inf + (-sign(0.5_dl,-f1+phi_p-c_4)-sign(0.5_dl,f1-phi_p-c_4))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4)) * f2
+				Delta_dV = (m2_inf + (-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4)) * f2
 			endif
 		endif
   end function Delta_dV
