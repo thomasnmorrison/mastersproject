@@ -27,9 +27,11 @@
 !#define NUMFIELD 2
 
 ! to do: figure out field outputing, should be done using a binary file
-! to do: output file with the run parameters, may be best to output this to terminal so the Niagara job output file contains this information as it is uniquely named
 ! to do: make a precompiler statement for choosing how rho is remormalized
 ! to do: make a precompiler for how fields are initialized
+! to do: make a separate module for output subroutines
+! to do: remove redundant FFTs from the zeta filtering computation
+! to do: make zeta calculation method macro
 
 program lattice
 #include "macros.h"
@@ -48,16 +50,17 @@ program lattice
 
   implicit none
 ! Time Stepping Properties
-  integer :: j, jj
-  integer, parameter :: nstep = 2**5 			! Determines total number of output steps
+  integer :: i, j, jj
+  integer, parameter :: nstep = 2**9 			! Determines total number of output steps
   integer, parameter :: stepsize = 2**5		! Determines number of integration steps between outputing data
-	integer, parameter :: stepslice = 2**3	! Determines number of output steps between outputing a lattice slice
+	integer, parameter :: stepslice = 2**2	! Determines number of output steps between outputing a lattice slice
 	integer, parameter :: zslice = nz/2 		! Determines which slice of the lattice is output
   real(dl), parameter :: tstep0 = 0.8_dl/(2.0_dl**14)!1.0_dl/(2.0_dl**16)!dx/10000.!tstep = dx/10. ! Base time step
 	real(dl) :: tstep = tstep0 							! time step which is updated
 	real(dl) :: t_cur = 0.0 								! tracks the elapsed conformal time
 !  real(dl), parameter :: tstep = 0.05
 	integer :: seed_in											! seed used for initializing field fluctuations
+	real(dl), parameter :: efold_init = 4.0_dl					! number of efolds of linear integration
 
   integer :: terror
 
@@ -66,6 +69,8 @@ program lattice
 
   complex(C_DOUBLE_COMPLEX), pointer :: Fk2(:,:,:)
 	complex(C_DOUBLE_COMPLEX), pointer :: Fk4(:,:,:) ! Fk3 is defined in zeta_mod.f90
+
+	character(len=*), parameter :: run_ident = "_ending"		! Identifier appended to output file names
 
 !	real(C_DOUBLE), pointer :: ggrad1(:,:,:)
 !	real(C_DOUBLE), pointer :: ggrad2(:,:,:)
@@ -108,25 +113,19 @@ program lattice
   call init_output()
 
 ! initialize fields	
-	call init_cor_rad_cosmic(4.0_dl, H0)										! provides initial power spectrum by integrating mode functions on oversampled, isotropic
+	call init_cor_rad_cosmic(efold_init, H0)										! provides initial power spectrum by integrating mode functions on oversampled, isotropic
 	! This loop is for testing field initialization, ordinarily only initialize fileds once
 	!call init_cor_rad_cosmic_z(5.0_dl, dphi0, H0)					! provides initial power spectrum for fields and zeta
 	!call write_cor_lat()
-	do seed_in=1,1
+	do seed_in=2,2
 	print*, "nfld=", nfld
-	call zeta_init()																			! initialize zeta to 0 on the whole lattice
 	call init_fields_cor_rad(cor_rad, seed_in)						! initialize fields from oversampled, isotropic power spectrum
-	!!! TESTING init_fields_cor_z_rad
-	!z_amp_rad(:) = 0.0_dl
-	!print*, "z_amp_rad=", z_amp_rad
-	!z_shift_rad(:) = 0.0_dl!0.25_dl*twopi 
-	!print*, "z_shift_rad=", z_shift_rad
-	!call init_fields_cor_z_rad(cor_rad, z_amp_rad, z_shift_rad, seed_in)
+	!call zeta_init_zero()																	! initialize zeta to 0 on the whole lattice
+	call zeta_init_pert([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)																	! initialize zeta to one-field perterbation theory result
 
 	!call init_fields_cor2(cor_lat,seed_in)								! initializes fields to match a supplied power spectrum on lattice
 	!call init_fields_cor_conv_test(cor_lat, seed_in)			! initialization for convergence test
-		!call init_fields_ind(seed_in)	! initialize fields indepentently
-		!call make_output(0.)	! output moved here for testing
+	!call init_fields_ind(seed_in)												! initialize fields indepentently
 	!enddo
   !call init_fields(1.)	! initialize fields as in Minkowski space
 	call init_sites()	! randomly sample lattice sites at which to track trajectories
@@ -142,38 +141,50 @@ program lattice
   print*,"Field Initialization time :",dble(ti2-ti1)/clock_rate, tr2-tr1
 
   call cpu_time(tr1); call system_clock(ti1)
-  !call make_output(0.)	! Commented out for testing
   call cpu_time(tr2); call system_clock(ti2,clock_rate)
   print*,"Initial Output Time :",dble(ti2-ti1)/clock_rate, tr2-tr1
 
   call cpu_time(tr1); call system_clock(ti1)
 	!initialize dzeta
-	!call get_dzeta([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)					! call for unsmoothed zeta
+	call get_dzeta([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)					! call for unsmoothed zeta
 	!call get_dzeta_part([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)		! call for unsmoothed zeta split by fields
 	!call get_dzeta_part_kgv([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)! call for unsmoothed zeta split by K, G, K+V, G+V
-	call get_dzeta_part_kgv_smooth([nx,ny,nz], dk, 1._dl, Fk, Fk2, Fk3, planf, planb)	! call for unsmoothed and smoothed zeta split by K+V, G
+	!call get_dzeta_part_kgv_smooth([nx,ny,nz], dk, 1._dl, Fk, Fk2, Fk3, planf, planb)	! call for unsmoothed and smoothed zeta split by K+V, G
 	!call get_dzeta_smooth([nx,ny,nz],dk,Fk,Fk2,Fk3,planf,planb)	! call for smoothed zeta
+	do i=1,n_scale
+		!call zeta_filter_sharp_k(dk, k_hor_smooth(i), Fk, 2*i-1,planf, planb)		! call for zeta_smooth calculated with a low-pass sharp k filter
+		call zeta_filter_sgauss_k(dk, k_hor_smooth(i), Fk, ord(i), i, planf, planb)		! call for zeta_smooth calculated with a low-pass s-Gaussian k filter
+	enddo
 
 	t_cur = 0.0_dl
 	call output_run_param(88)
 	call make_output(0._dl, 0)
   do j=1,nstep
-     print*,"step ", j
-     !call symp6(tstep, stepsize)
-		 call symp8(tstep, stepsize)
-     !step zeta
-			!if (yscl>2._dl) then	! start zeta integration late
-		 !call zeta_step(stepsize*tstep, [nx,ny,nz], dk, Fk, Fk2, Fk3, planf, planb)
-		 !call zeta_step_kgv(stepsize*tstep, [nx,ny,nz], dk, Fk, Fk2, Fk3, planf, planb)		! Step zeta integration with K, G, K+V, G+V parts
-		 call zeta_step_kgv_smooth(stepsize*tstep, [nx,ny,nz], dk, 1._dl, Fk, Fk2, Fk3, planf, planb)		! Step zeta integration with K+V, G, K+V smooth, G smooth parts
-			!endif
-		 !adapt step size
-		 t_cur = t_cur + stepsize*tstep
-		 call tstep_adapt()
-     !call make_output(j*stepsize*tstep)
-			!if (modulo(j,2**5)==0) then
-		 call make_output(t_cur, j)
-			!endif
+    print*,"step ", j
+    !call symp6(tstep, stepsize)
+		call symp8(tstep, stepsize)
+    !step zeta
+		call zeta_step(stepsize*tstep, [nx,ny,nz], dk, Fk, Fk2, Fk3, planf, planb)	! step zeta_lat without calculation of zeta partials
+		!call zeta_step_kgv(stepsize*tstep, [nx,ny,nz], dk, Fk, Fk2, Fk3, planf, planb)		! Step zeta integration with K, G, K+V, G+V parts
+		!call zeta_step_kgv_smooth(stepsize*tstep, [nx,ny,nz], dk, 1._dl, Fk, Fk2, Fk3, planf, planb)		! Step zeta integration with K+V, G, K+V smooth, G smooth parts
+
+		!call zeta_kick(dk, k2_kick_low, 1.0_dl, Fk, planf, planb)	! call for zeta_smooth calculated with kicks from a sharp k filter
+		!call zeta_kick_pert_rho(dk, k2_kick_low, 3.0_dl, Fk, Fk2, Fk3, planf, planb)
+		!call zeta_kick_pert(dk, k2_kick_low_pert, 1.0_dl, Fk, Fk2, Fk3, planf, planb)
+
+		! Calculate filtered zeta
+		do i=1,n_scale
+			!call zeta_filter_sharp_k(dk, k_hor_smooth(i), Fk, 2*i-1,planf, planb)		! call for zeta_smooth calculated with a low-pass sharp k filter
+			call zeta_filter_sgauss_k(dk, k_hor_smooth(i), Fk, ord(i), i, planf, planb)		! call for zeta_smooth calculated with a low-pass s-Gaussian k filter
+		enddo
+
+		!adapt step size
+		t_cur = t_cur + stepsize*tstep
+		call tstep_adapt()
+    !call make_output(j*stepsize*tstep)
+		!if (modulo(j,2**5)==0) then
+		call make_output(t_cur, j)
+		!endif
   enddo
 	enddo
   call cpu_time(tr2); call system_clock(ti2,clock_rate)
@@ -195,15 +206,6 @@ program lattice
 	call allocate_3d_fourier_array(nx,ny,nz,Fk3)
 	call allocate_3d_fourier_array(nx,ny,nz,Fk4)
 	call allocate_3d_real_array(nx,ny,nz,ggrad1)
-!	call allocate_3d_real_array(nx,ny,nz,ggrad2)
-!	call allocate_3d_real_array(nx,ny,nz,ggrad3)
-!	call allocate_3d_real_array(nx,ny,nz,ggrad4)
-!	call allocate_3d_real_array(nx,ny,nz,zf1)
-!	call allocate_3d_real_array(nx,ny,nz,zf2)
-!	call allocate_3d_real_array(nx,ny,nz,zf3)!new
-!	call allocate_3d_real_array(nx,ny,nz,zf4)!new
-!	call allocate_3d_real_array(nx,ny,nz,zfp1)
-!	call allocate_3d_real_array(nx,ny,nz,zfp2)
 	call allocate_3d_real_array(nx,ny,nz,zlap1)
 	call allocate_3d_real_array(nx,ny,nz,zlap2)
 #endif
@@ -662,19 +664,20 @@ program lattice
 
     subroutine init_output()
       !open(unit=99,file="field_values_spec.out")
-			open(unit=98,file="energy_spec.out")
-			open(unit=97,file="spectrum.out")
-			open(unit=96,file="zeta.out")
-			open(unit=94,file="lat_sample.out")
+			open(unit=98,file="energy_spec"//run_ident//".out")
+			open(unit=97,file="spectrum"//run_ident//".out")
+			open(unit=96,file="zeta"//run_ident//".out")
+!			open(unit=94,file="lat_sample"//run_ident//".out")
 			!open(unit=92,file="lat_dump.out",form="unformatted") !TESTING REQUIRED! binary file of field output
 !			open(unit=93,file="sample_sites.out")
-			open(unit=91,file="init_spectrum.out")
-			open(unit=90,file="lat_slice.out")
+			open(unit=91,file="init_spectrum"//run_ident//".out")
+			open(unit=90,file="lat_slice"//run_ident//".out")
 			!open(unit=89,file="lat.out")
-			open(unit=88,file="run_param.out")
+			open(unit=88,file="run_param"//run_ident//".out")
 			!open(unit=87,file='zeta_smooth.out')
-			open(unit=86,file='zeta_part.out')
-			open(unit=85,file='spectrum_zeta_part.out')
+			open(unit=86,file="zeta_part"//run_ident//".out")
+			open(unit=85,file="spectrum_zeta_part"//run_ident//".out")
+			!open(unit=84,file='filter_test.out') ! done instead in post processing
 #ifdef THREEDIM
       call init_spectrum_3d(nx,ny,nz)
 #endif
@@ -687,16 +690,28 @@ program lattice
     end subroutine init_output
 		
 		! Subroutine to output the run parameters in a human readable way
+		! to do: make output for how zeta is calculated/smoothed
+		! to do: make output identification for integration scheme
 		subroutine output_run_param(n_file)
 			integer :: n_file		! file number
+			! write lattice parameters
 			write(n_file, '(A, 2x, 3(I5,2x))'), "nx, ny, nz: ", nx, ny, nz
 			write(n_file, '(A, 2x, ES22.15, 2x)'), "len: ", len
 			write(n_file, '(A, 2x, ES22.15, 2x)'), "mpl: ", mpl
+			! write run parameters
+			write(n_file, '(A, 2x, 3(I5,2x))'), "nstep, stepsize, stepslice: ", nstep, stepsize, stepslice
+			write(n_file, '(A, 2x, ES22.15, 2x)'), "tstep0: ", tstep0
+			! write mean initial conditions
 			if (nfld==1) then
 				write(n_file, '(A, 2x, 3(ES22.15, 2x))'), "phi0, dphi0, H0: ", phi0, dphi0, H0
 			elseif (nfld==2) then
 				write(n_file, '(A, 2x, 5(ES22.15, 2x))'), "phi0, dphi0, chi0, dchi0, H0: ", phi0, dphi0, chi0, dchi0, H0
 			endif
+			! write fluctuation initialization parameters
+			write(n_file, '(A, 2x, I5, 2x)'), "seed_in", seed_in
+			write(n_file, '(A, 2x, 2(ES22.15, 2x))'), "efold_init, nstep_mode: ", efold_init, nstep_mode
+			write(n_file, '(A, 2x, (ES22.15, 2x))'), "KCUT_FAC: ", KCUT_FAC 
+			! write potential type and parameters
 			write(n_file, '(A, 2x, I5,2x)'), "infl_option: ", infl_option
 			if (nfld == 2) then
 				write(n_file, '(A, 2x, I5,2x)'), "potential_option: ", potential_option
@@ -711,6 +726,12 @@ program lattice
 				write(n_file, '(A, 2x, (ES22.15, 2x))'), "lambda_chi: ", lambda_chi
 				write(n_file, '(A, 2x, 4(ES22.15, 2x))'), "phi_p, phi_w, m2_inf, m2_p: ", phi_p, phi_w, m2_inf, m2_p
 			endif
+			! write zeta calculation proceedure, ie what are the partial zetas
+
+			! write zeta smoothing proccedure and scales
+			write(n_file, '(A, 2x, 2(I5, 2x))'), "n_scale, n_moment: ", n_scale, n_moment
+			write(n_file, '(A, 2x, 30(ES22.15, 2x))'), "k_hor_smooth: ", k_hor_smooth
+			write(n_file, '(A, 2x, 30(I5, 2x))'), "ord: ", ord
 			close(unit=n_file)
 		end subroutine output_run_param
 
@@ -724,7 +745,7 @@ program lattice
 
       call dump_rho(time)
 			call write_zeta(time, 96)
-			call write_lat_sample(time)
+			!call write_lat_sample(time)
 			if (0 == mod(step, stepslice)) then
 				call write_spec(97)
 				call write_slice(time, zslice, 90)
@@ -860,16 +881,15 @@ program lattice
     end subroutine make_output
 
 		! Subroutine that outputs the spectra and cross-spectra of the component parts of zeta
-		! to do: declare variables
 		! to do: calculate spectra
 		! to do: calculate cross-spectra
 		! to do: make output
 		subroutine write_zeta_part_spec(n_file)
 			integer :: n_file		! file number
 			integer :: i,j
-			real(dl) :: spec(ns,2*(4) + 2)
+			real(dl) :: spec(ns,2*(nzpart) + 2)
 
-			do i=1,4
+			do i=1,nzpart
 				laplace(IRANGE) = zeta_part(i,IRANGE)
 				call spectrum_3d(spec(:,2*i-1), laplace, Fk, planf)
 				laplace(IRANGE) = dzeta_part(i,IRANGE)	!dzeta_part(2,2*(i-1)+j,IRANGE)
@@ -1016,9 +1036,10 @@ program lattice
 		do i=1,nx; do j=1,ny
 #ifdef ONEFLD
 			!write(90,'(30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
-			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice), zeta_smooth(i,j,kslice),  dzeta_smooth(i,j,kslice)
+			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice), zeta_smooth(1,i,j,kslice),  dzeta_smooth(i,j,kslice), zeta_smooth_pert(i,j,kslice), zeta_pert(i,j,kslice), delta_alpha(i,j,kslice)
 #elif TWOFLD2
-			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice), fld(2,i,j,kslice), fldp(2,i,j,kslice), zeta_smooth(i,j,kslice),  dzeta_smooth(i,j,kslice)
+			!write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice), fld(2,i,j,kslice), fldp(2,i,j,kslice), zeta_smooth(i,j,kslice),  dzeta_smooth(i,j,kslice)
+			write(n_file,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice), fld(2,i,j,kslice), fldp(2,i,j,kslice), zeta_smooth(:,i,j,kslice)
 #endif
 		enddo; enddo
 		write(90,*)
@@ -1033,10 +1054,10 @@ program lattice
 #ifdef ONEFLD
 			!write(90,'(30(ES22.15,2x))') time, i, j, kslice, zeta_lat(i,j,kslice), dzeta_lat(2,i,j,kslice), fld(1,i,j,kslice), fldp(1,i,j,kslice)
 			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, i, j, k, zeta_lat(i,j,k), dzeta_lat(i,j,k), fld(1,i,j,k), fldp(1,i,j,k),&
-			zeta_smooth(i,j,k),  dzeta_smooth(i,j,k)
+			zeta_smooth(1,i,j,k),  dzeta_smooth(i,j,k)
 #elif TWOFLD2
 			write(89,'(ES22.15,2x,3(I5,2x),30(ES22.15,2x))') time, zeta_lat(i,j,k), dzeta_lat(i,j,k), zeta_part(1,i,j,k), zeta_part(2,i,j,k),&
-			fld(1,i,j,k), fldp(1,i,j,k), fld(2,i,j,k), fldp(2,i,j,k), zeta_smooth(i,j,k),  dzeta_smooth(i,j,k)
+			fld(1,i,j,k), fldp(1,i,j,k), fld(2,i,j,k), fldp(2,i,j,k), zeta_smooth(1,i,j,k),  dzeta_smooth(i,j,k)
 #endif
 		enddo; enddo; enddo
 		write(89,*)		

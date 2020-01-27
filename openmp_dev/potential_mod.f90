@@ -5,10 +5,8 @@
 ! This may require moving some of the parameter definitions from the hamiltonian
 ! module over to here.
 
-! to do: remove definition of potential and modeldv from hamiltonian
 ! to do: add the ability to define multiple phi_p for multiple interactions
 ! to do: longitudinal instability
-! to do: the optional arguments for nfld=1 vs nfld=2 is too cumbersum, replace with _1fld, _2fld versions and use preprocessor statement 
 ! to do: write a subroutine to calculate the trace of the mass matrix
 
 module potential_mod
@@ -24,7 +22,7 @@ module potential_mod
 #ifdef TWOFLD2
 	integer, parameter :: nfld=2
 #endif
-	integer, parameter :: potential_option = 5 ! parameter to choose the form of Delta_V
+	integer, parameter :: potential_option = 7 ! parameter to choose the form of Delta_V
 	! no phi-chi interaction, chi massless: potential_option = 0
 	! trapped plus transverse instability: potential_option = 1
 	! transverse instability blip: potential_option = 2
@@ -32,6 +30,7 @@ module potential_mod
 	! trapped-asymptotically constant: potential_option = 4
 	! constant chi mass: potential_option = 5
 	! trapped-asymptotically constant (polynomial): potential_option = 6
+	! instability turn-on (polynomial): potential_option = 7
 	integer, parameter :: infl_option = 2 ! parameter to choose form of inflationary potential
 	! phi^4: infl_option = 1
 	! m^2 phi^2: infl_option = 2
@@ -40,7 +39,7 @@ module potential_mod
 	! general parameters
 	real(dl), parameter :: mpl=1.e5												! machine units conversion factor, moved from hampiltonian_conformal.f90
 	real(dl), parameter :: m2 = 1.0_dl										! inflaton mass
-	real(dl), parameter :: lambda_chi = 10.0_dl!10.0_dl						! chi self interaction
+	real(dl), parameter :: lambda_chi = 1.e5!10.0_dl						! chi self interaction
 	real(dl), parameter :: phi_p = 8.75_dl!*dsqrt(4.0*twopi)	! interaction potential characteristic phi value
 
 	! potential_option = 1 parameters
@@ -55,7 +54,7 @@ module potential_mod
 
 	! potential_option = 4 parameters
 	real(dl), parameter :: m2_inf = 1._dl*m2										! asymptotic squared mass of chi
-	real(dl), parameter :: m2_p =	-100._dl*m2										! minimum squared mass of chi (at phi=phi_p) 
+	real(dl), parameter :: m2_p =	-3000._dl*m2										! minimum squared mass of chi (at phi=phi_p) 
 	! Derived parameters
 	real(dl), parameter :: c_3 = 0._dl!2.*sqrt(3.*g2/(m2_inf-m2_p))
 	! Also set g2 under "potential_option = 1 parameters"
@@ -63,7 +62,7 @@ module potential_mod
 	! potential_option = 5 parameters
 	! set m2_inf under "potential_option = 4 parameters"
 
-	! potential_option = 6 parameters
+	! potential_option = 6,7 parameters
 	real(dl), parameter :: phi_w = 0.05_dl															! width of delta V, with g2 as a derived parameter
 	!real(dl), parameter :: phi_w = sqrt(2._dl*(m2_inf-m2_p)/g2)		! width of delta V as a derived parameter
 	real(dl), parameter :: g2 = 2._dl*(m2_inf-m2_p)/phi_w**2				! coupling strength as a derived parameter
@@ -173,6 +172,8 @@ contains
 			Delta_V = 0.5 * m2_inf * f2**2
 		elseif (potential_option==6) then
 			Delta_V = 0.5_dl * (m2_inf + (-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4)) * f2**2
+		elseif (potential_option==7) then
+			Delta_V = 0.5_dl * (m2_inf + (-sign(0.5_dl,-f1+phi_p)-sign(0.5_dl,f1-phi_p-phi_w))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4) + (0.5_dl - sign(0.5_dl,f1-phi_p))*(m2_p-m2_inf)) * f2**2
 		endif
   end function Delta_V
 
@@ -186,10 +187,14 @@ contains
 		if (ind==1) then
 			if (potential_option==6) then
 				dV_int = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
+			elseif (potential_option==7) then
+				!dV_int = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
 			endif
 		elseif (ind==2) then
 			if (potential_option==6) then
 				dV_int = (-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - 0.25_dl*g2**2/(m2_inf-m2_p)*(f1-phi_p)**4) * f2
+			elseif (potential_option==7) then
+				!dV_int = (-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - 0.25_dl*g2**2/(m2_inf-m2_p)*(f1-phi_p)**4) * f2
 			endif
 		endif
 
@@ -249,6 +254,12 @@ contains
 				Delta_dV = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
 			elseif (ind==2) then
 				Delta_dV = (m2_inf + (-sign(0.5_dl,-f1+phi_p-phi_w)-sign(0.5_dl,f1-phi_p-phi_w))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4)) * f2
+			endif
+		elseif (potential_option==7) then
+			if (ind==1) then
+				Delta_dV = 0.5_dl * ((-sign(0.5_dl,-f1+phi_p)-sign(0.5_dl,f1-phi_p-phi_w))*( 2._dl*g2*(f1-phi_p) - g2**2/(m2_inf-m2_p)*(f1-phi_p)**3)) * f2**2
+			elseif (ind==2) then
+				Delta_dV = (m2_inf + (-sign(0.5_dl,-f1+phi_p)-sign(0.5_dl,f1-phi_p-phi_w))*( m2_p-m2_inf + g2*(f1-phi_p)**2 - g2**2/(4._dl*(m2_inf-m2_p))*(f1-phi_p)**4) + (0.5_dl - sign(0.5_dl,f1-phi_p))*(m2_p-m2_inf)) * f2
 			endif
 		endif
   end function Delta_dV

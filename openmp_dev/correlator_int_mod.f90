@@ -23,7 +23,7 @@ integer, parameter :: os_mode = 2**4 									! factor by which k is oversampled
 integer, parameter :: nos_mode = max(nx,ny,nz)*os_mode		! number times dkos to reach max k on lattice, as is this has an implicit top hat filter at he Nyquist frequency
 real(dl), parameter :: dkos_mode = dk/dble(os_mode)					! oversampled mode spacing
 
-integer, parameter :: nstep_mode = 2**14									! number of intgration steps
+integer, parameter :: nstep_mode = 2**16									! number of intgration steps
 
 real(dl), dimension(2*nfld,2*nfld,nos_mode) :: cor_rad			! power on some oversampled radial profile
 real(dl), dimension(nos_mode)	:: z_amp_rad									! zeta mode amplitudes on oversampled radial profile
