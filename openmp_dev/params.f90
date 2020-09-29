@@ -10,7 +10,7 @@ module params
   integer, parameter :: nn = min(nnx,nny,nnz)
 
   real(dl), parameter :: nvol = dble(nx)*dble(ny)*dble(nz)
-  real(dl), parameter :: len = 3.473_dl!20.838_dl!
+  real(dl), parameter :: len = 20._dl
   real(dl), parameter :: dx = len/dble(nx)
   real(dl), parameter :: dk = twopi / len
 

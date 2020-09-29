@@ -152,6 +152,21 @@ contains
 		endif
 	end function background_dV_1fld
 
+  ! Function to calculate the second derivative of the background potential for 
+  ! 1 field models
+  elemental function background_ddv_1fld(f1)
+    real(dl) :: background_ddv_1fld
+    real(dl), intent(in) :: f1
+
+    if (infl_option==1) then
+      background_ddv_1fld = 3*f1**2
+    elseif (infl_option==2) then
+      background_ddv_1fld = m2
+    elseif (infl_option==3) then
+      background_ddv_1fld = 0._dl
+    endif
+  end function background_ddv_1fld
+
 	! Function to calculate the interaction potential (includes V(chi))
 	elemental function Delta_V(f1,f2)
     real(dl) :: Delta_V
@@ -308,6 +323,22 @@ contains
 			modeldv_test = background_dV_1fld(f1)
 		endif
 	end function modeldv_test
+
+  ! Function to calculate the second derivative of the potential
+  ! to do: write the two field case
+  elemental function modelddv(f1,f2,ind1,ind2)
+    real(dl) :: modelddv
+    real(dl), intent(in) :: f1
+    real(dl), intent(in), optional :: f2
+    integer, intent(in), optional :: ind1, ind2
+
+    if (present(f2)) then
+      ! need to add this capacity
+    else
+      modelddv = background_ddv_1fld(f1)
+    endif
+  end function modelddv
+    
 
 	! Function to calculate the trace of the mass matrix
 	function trace_m2(f1,f2)

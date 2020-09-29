@@ -30,7 +30,7 @@ BLAS = -lrefblas
 #FFTW = -lfftw3_threads -lfftw3
 
 HAM = hamiltonian_conformal.o 
-OBJS = fftw_mod.o params.o analysis_spec.o potential_mod.o correlator_int_mod.o $(HAM) sample_sites_mod.o moments_mod.o zeta_mod.o #integrator.o #correlator_mod.o
+OBJS = fftw_mod.o params.o grv_mod.o analysis_spec.o potential_mod.o correlator_int_mod.o $(HAM) sample_sites_mod.o moments_mod.o zeta_mod.o #integrator.o #correlator_mod.o
 
 spectral: %: $(OBJS) evolve_spectral.o
 	$(FC) $(FFTW_INC) $(LAPACK_INC) $(FFLAGS) $(FOPT) $(FPROF) $(FWARN) -o runspec evolve_spectral.f90 $(OBJS) $(FFTW_LIB) $(FFTW) $(LAPACK_LIB) $(LAPACK) $(BLAS) -lm $(THREAD_LIB)

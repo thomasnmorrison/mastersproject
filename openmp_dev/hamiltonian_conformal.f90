@@ -53,6 +53,8 @@ module Hamiltonian
 #ifdef THREEDIM
   real(C_DOUBLE), pointer :: laplace(:,:,:)
   complex(C_DOUBLE_COMPLEX), pointer :: Fk(:,:,:)
+  complex(C_DOUBLE_COMPLEX), pointer :: Fk2(:,:,:)
+	complex(C_DOUBLE_COMPLEX), pointer :: Fk4(:,:,:)
 #endif
 #ifdef TWODIM
   real(C_DOUBLE), pointer :: laplace(:,:)
